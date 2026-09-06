@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -5,128 +6,436 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Weekly Range Scanner</title>
 <style>
-  :root { font-family: Arial, sans-serif; color:#e8eef7; background:#0b1220; }
-  * { box-sizing:border-box; }
-  body { margin:0; background:linear-gradient(180deg,#0b1220,#111827); }
-  .wrap { max-width:1100px; margin:auto; padding:24px 16px 50px; }
-  h1 { margin:0 0 6px; font-size:28px; }
-  .sub { color:#9ca8b8; margin-bottom:22px; }
-  .card { background:#151e2e; border:1px solid #263449; border-radius:14px; padding:18px; margin-bottom:16px; }
-  .controls { display:flex; gap:10px; flex-wrap:wrap; }
-  input,button { border-radius:9px; border:1px solid #34445d; padding:11px 13px; font-size:15px; }
-  input { background:#0d1524; color:#fff; min-width:220px; text-transform:uppercase; }
-  button { background:#2563eb; color:white; cursor:pointer; border:0; font-weight:700; }
-  button.secondary { background:#334155; }
-  .notice { color:#f8d477; font-size:13px; line-height:1.5; }
-  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:10px; }
-  .metric { background:#0d1524; border-radius:10px; padding:13px; }
-  .label { color:#93a0b3; font-size:12px; }
-  .value { font-size:21px; font-weight:700; margin-top:5px; }
-  .good { color:#55d68a; } .warn { color:#f4c95d; } .bad { color:#ff7272; }
-  table { width:100%; border-collapse:collapse; }
-  th,td { padding:11px 8px; border-bottom:1px solid #263449; text-align:right; }
-  th:first-child,td:first-child { text-align:left; }
-  th { color:#93a0b3; font-size:12px; }
-  .small { color:#7f8da1; font-size:12px; line-height:1.5; }
-  code { background:#0b1220; padding:2px 5px; border-radius:5px; }
+:root{font-family:Arial,sans-serif;color:#e8eef7;background:#0b1220}
+*{box-sizing:border-box}
+body{margin:0;background:linear-gradient(180deg,#0b1220,#111827)}
+.wrap{max-width:1150px;margin:auto;padding:24px 16px 50px}
+h1{margin:0 0 6px;font-size:28px}
+.sub{color:#9ca8b8;margin-bottom:22px}
+.card{background:#151e2e;border:1px solid #263449;border-radius:14px;padding:18px;margin-bottom:16px}
+.controls{display:flex;gap:10px;flex-wrap:wrap}
+input,button{border-radius:9px;border:1px solid #34445d;padding:11px 13px;font-size:15px}
+input{background:#0d1524;color:#fff;min-width:220px;text-transform:uppercase}
+button{background:#2563eb;color:#fff;cursor:pointer;border:0;font-weight:700}
+button.secondary{background:#334155}
+.notice{color:#f8d477;font-size:13px;line-height:1.5}
+.success{color:#55d68a}
+.error{color:#ff7272}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.metric{background:#0d1524;border-radius:10px;padding:13px}
+.label{color:#93a0b3;font-size:12px}
+.value{font-size:21px;font-weight:700;margin-top:5px}
+.good{color:#55d68a}.warn{color:#f4c95d}.bad{color:#ff7272}
+table{width:100%;border-collapse:collapse}
+th,td{padding:11px 8px;border-bottom:1px solid #263449;text-align:right}
+th:first-child,td:first-child{text-align:left}
+th{color:#93a0b3;font-size:12px}
+.small{color:#7f8da1;font-size:12px;line-height:1.5}
+.loading{opacity:.7}
 </style>
 </head>
+
 <body>
 <div class="wrap">
-  <h1>Weekly Range Scanner</h1>
-  <div class="sub">Calculadora V1 — rango semanal, AWR y porcentaje consumido</div>
 
-  <div class="card">
-    <div class="controls">
-      <input id="ticker" value="NVDA" maxlength="12" aria-label="Ticker">
-      <button onclick="showDemo()">Analizar</button>
-      <button class="secondary" onclick="loadExamples()">Ver ejemplos</button>
-    </div>
-    <p class="notice">
-      Esta V1 funciona sin instalar nada y sirve para comprobar la lógica de la aplicación.
-      Los datos mostrados son de demostración. En la siguiente etapa conectaremos una fuente
-      de datos de mercado para actualización automática.
-    </p>
+<h1>Weekly Range Scanner</h1>
+<div class="sub">Rango semanal, AWR, volumen y RVOL con datos reales</div>
+
+<div class="card">
+  <div class="controls">
+    <input id="ticker" value="NVDA" maxlength="12" aria-label="Ticker">
+    <button onclick="analyzeTicker()">Analizar</button>
+    <button class="secondary" onclick="loadExamples()">Ejemplos</button>
   </div>
 
-  <div id="result" class="card"></div>
+  <p id="status" class="notice">
+    Introduce un ticker de acciones o ETF y pulsa Analizar.
+  </p>
+</div>
 
-  <div class="card">
-    <h2>Cómo se calcula</h2>
-    <p class="small">
-      Rango semanal = máximo semanal − mínimo semanal.<br>
-      AWR = promedio de los rangos semanales anteriores.<br>
-      % consumido = rango de esta semana ÷ AWR × 100.<br>
-      Rango restante estimado = AWR − rango recorrido actual.
-    </p>
-  </div>
+<div id="result" class="card">
+  <h2>Esperando ticker...</h2>
+</div>
+
+<div class="card">
+  <h2>Qué mide esta aplicación</h2>
+  <p class="small">
+    <b>Rango semanal:</b> máximo semanal − mínimo semanal.<br>
+    <b>AWR:</b> promedio del rango de las semanas anteriores.<br>
+    <b>% consumido:</b> rango actual ÷ AWR × 100.<br>
+    <b>Rango restante:</b> AWR − rango recorrido actual.<br>
+    <b>RVOL:</b> volumen de la semana actual ÷ volumen semanal promedio.
+  </p>
+</div>
+
 </div>
 
 <script>
-const demo = {
-  NVDA:{price:225.40, high:229.80, low:216.20, awr4:16.50, awr8:17.10, awr12:18.20, awr20:19.10, awr52:21.40},
-  META:{price:615.20, high:622.40, low:604.10, awr4:31.40, awr8:29.80, awr12:30.60, awr20:32.10, awr52:35.20},
-  AMZN:{price:231.80, high:235.70, low:223.10, awr4:12.80, awr8:13.40, awr12:14.10, awr20:14.80, awr52:16.20},
-  QQQ:{price:573.40, high:576.80, low:568.20, awr4:10.60, awr8:10.20, awr12:10.80, awr20:11.10, awr52:12.40},
-  SPY:{price:646.20, high:649.10, low:642.00, awr4:8.40, awr8:8.10, awr12:8.50, awr20:8.80, awr52:9.40}
-};
 
-function pct(n){ return n.toFixed(1)+'%'; }
-function money(n){ return '$'+n.toFixed(2); }
+const API_URL="https://weekly-range-api.changowalu.workers.dev/api";
 
-function analyze(ticker, d){
-  const range = d.high-d.low;
-  const used = range/d.awr4*100;
-  const remaining = Math.max(0,d.awr4-range);
-  const roomHigh = d.high-d.price;
-  const roomLow = d.price-d.low;
-  let cls = used < 50 ? 'good' : used < 75 ? 'warn' : 'bad';
-  let status = used < 50 ? 'MUCHO ESPACIO' : used < 75 ? 'ESPACIO MODERADO' : used < 100 ? 'EXTENDIDA' : 'MUY EXTENDIDA';
-  document.getElementById('result').innerHTML = `
+function money(n){
+  if(n===null||n===undefined||isNaN(n))return "—";
+  return "$"+Number(n).toFixed(2);
+}
+
+function number(n){
+  if(n===null||n===undefined||isNaN(n))return "—";
+  return Number(n).toLocaleString("en-US",{maximumFractionDigits:0});
+}
+
+function pct(n){
+  if(n===null||n===undefined||isNaN(n))return "—";
+  return Number(n).toFixed(1)+"%";
+}
+
+function ratio(n){
+  if(n===null||n===undefined||isNaN(n))return "—";
+  return Number(n).toFixed(2)+"x";
+}
+
+function getWeekKey(dateString){
+  const d=new Date(dateString+"T00:00:00Z");
+  const day=d.getUTCDay();
+  const diff=day===0?-6:1-day;
+  d.setUTCDate(d.getUTCDate()+diff);
+  return d.toISOString().slice(0,10);
+}
+
+function processData(values){
+
+  if(!values||!values.length){
+    throw new Error("No se recibieron datos.");
+  }
+
+  const rows=values.map(x=>({
+    date:x.datetime,
+    open:Number(x.open),
+    high:Number(x.high),
+    low:Number(x.low),
+    close:Number(x.close),
+    volume:Number(x.volume||0)
+  })).filter(x=>!isNaN(x.high)&&!isNaN(x.low));
+
+  rows.sort((a,b)=>a.date.localeCompare(b.date));
+
+  const weeks={};
+
+  rows.forEach(r=>{
+    const key=getWeekKey(r.date);
+
+    if(!weeks[key]){
+      weeks[key]={
+        week:key,
+        high:r.high,
+        low:r.low,
+        volume:r.volume,
+        lastDate:r.date,
+        close:r.close
+      };
+    }else{
+      weeks[key].high=Math.max(weeks[key].high,r.high);
+      weeks[key].low=Math.min(weeks[key].low,r.low);
+      weeks[key].volume+=r.volume;
+
+      if(r.date>=weeks[key].lastDate){
+        weeks[key].lastDate=r.date;
+        weeks[key].close=r.close;
+      }
+    }
+  });
+
+  const weekList=Object.values(weeks).sort((a,b)=>a.week.localeCompare(b.week));
+
+  if(weekList.length<2){
+    throw new Error("No hay suficientes semanas para calcular el rango.");
+  }
+
+  const current=weekList[weekList.length-1];
+
+  weekList.forEach(w=>{
+    w.range=w.high-w.low;
+  });
+
+  const previous=weekList.slice(0,-1).reverse();
+
+  function averageRange(n){
+    const arr=previous.slice(0,n);
+    if(!arr.length)return null;
+    return arr.reduce((s,w)=>s+w.range,0)/arr.length;
+  }
+
+  function averageVolume(n){
+    const arr=previous.slice(0,n);
+    if(!arr.length)return null;
+    return arr.reduce((s,w)=>s+w.volume,0)/arr.length;
+  }
+
+  const price=current.close;
+  const range=current.range;
+
+  const awr4=averageRange(4);
+  const awr8=averageRange(8);
+  const awr12=averageRange(12);
+  const awr20=averageRange(20);
+  const awr52=averageRange(52);
+
+  const avgVol4=averageVolume(4);
+  const avgVol8=averageVolume(8);
+  const avgVol12=averageVolume(12);
+  const avgVol20=averageVolume(20);
+  const avgVol52=averageVolume(52);
+
+  const used=awr4?range/awr4*100:null;
+  const remaining=awr4?Math.max(0,awr4-range):null;
+
+  const rvol4=avgVol4?current.volume/avgVol4:null;
+  const rvol20=avgVol20?current.volume/avgVol20:null;
+
+  return{
+    price,
+    high:current.high,
+    low:current.low,
+    range,
+    volume:current.volume,
+    awr4,
+    awr8,
+    awr12,
+    awr20,
+    awr52,
+    avgVol4,
+    avgVol8,
+    avgVol12,
+    avgVol20,
+    avgVol52,
+    rvol4,
+    rvol20,
+    used,
+    remaining,
+    weeks:weekList.length
+  };
+}
+
+function render(ticker,d){
+
+  let cls="good";
+  let status="MUCHO ESPACIO";
+
+  if(d.used!==null){
+    if(d.used>=100){
+      cls="bad";
+      status="MUY EXTENDIDA";
+    }else if(d.used>=75){
+      cls="bad";
+      status="EXTENDIDA";
+    }else if(d.used>=50){
+      cls="warn";
+      status="ESPACIO MODERADO";
+    }
+  }
+
+  const roomHigh=d.high-d.price;
+  const roomLow=d.price-d.low;
+  const rangePct=d.price?d.range/d.price*100:null;
+
+  document.getElementById("result").innerHTML=`
+
     <h2>${ticker}</h2>
+
     <div class="grid">
-      <div class="metric"><div class="label">Precio</div><div class="value">${money(d.price)}</div></div>
-      <div class="metric"><div class="label">Máximo semanal</div><div class="value">${money(d.high)}</div></div>
-      <div class="metric"><div class="label">Mínimo semanal</div><div class="value">${money(d.low)}</div></div>
-      <div class="metric"><div class="label">Rango actual</div><div class="value">${money(range)}</div></div>
-      <div class="metric"><div class="label">AWR 4 semanas</div><div class="value">${money(d.awr4)}</div></div>
-      <div class="metric"><div class="label">AWR 8 semanas</div><div class="value">${money(d.awr8)}</div></div>
-      <div class="metric"><div class="label">AWR 12 semanas</div><div class="value">${money(d.awr12)}</div></div>
-      <div class="metric"><div class="label">AWR 20 semanas</div><div class="value">${money(d.awr20)}</div></div>
-      <div class="metric"><div class="label">AWR 52 semanas</div><div class="value">${money(d.awr52)}</div></div>
-      <div class="metric"><div class="label">% consumido vs AWR4</div><div class="value ${cls}">${pct(used)}</div></div>
-      <div class="metric"><div class="label">Rango restante</div><div class="value">${money(remaining)}</div></div>
-      <div class="metric"><div class="label">Estado</div><div class="value ${cls}" style="font-size:16px">${status}</div></div>
+
+      <div class="metric">
+        <div class="label">Precio actual</div>
+        <div class="value">${money(d.price)}</div>
+      </div>
+
+      <div class="metric">
+        <div class="label">Máximo semanal</div>
+        <div class="value">${money(d.high)}</div>
+      </div>
+
+      <div class="metric">
+        <div class="label">Mínimo semanal</div>
+        <div class="value">${money(d.low)}</div>
+      </div>
+
+      <div class="metric">
+        <div class="label">Rango semanal</div>
+        <div class="value">${money(d.range)}</div>
+      </div>
+
+      <div class="metric">
+        <div class="label">AWR 4 semanas</div>
+        <div class="value">${money(d.awr4)}</div>
+      </div>
+
+      <div class="metric">
+        <div class="label">AWR 8 semanas</div>
+        <div class="value">${money(d.awr8)}</div>
+      </div>
+
+      <div class="metric">
+        <div class="label">AWR 12 semanas</div>
+        <div class="value">${money(d.awr12)}</div>
+      </div>
+
+      <div class="metric">
+        <div class="label">AWR 20 semanas</div>
+        <div class="value">${money(d.awr20)}</div>
+      </div>
+
+      <div class="metric">
+        <div class="label">AWR 52 semanas</div>
+        <div class="value">${money(d.awr52)}</div>
+      </div>
+
+      <div class="metric">
+        <div class="label">% consumido AWR4</div>
+        <div class="value ${cls}">${pct(d.used)}</div>
+      </div>
+
+      <div class="metric">
+        <div class="label">Rango restante</div>
+        <div class="value">${money(d.remaining)}</div>
+      </div>
+
+      <div class="metric">
+        <div class="label">Estado</div>
+        <div class="value ${cls}" style="font-size:16px">${status}</div>
+      </div>
+
     </div>
+
     <br>
+
+    <h3>Volumen</h3>
+
+    <div class="grid">
+
+      <div class="metric">
+        <div class="label">Volumen semanal actual</div>
+        <div class="value">${number(d.volume)}</div>
+      </div>
+
+      <div class="metric">
+        <div class="label">Promedio volumen 4S</div>
+        <div class="value">${number(d.avgVol4)}</div>
+      </div>
+
+      <div class="metric">
+        <div class="label">Promedio volumen 20S</div>
+        <div class="value">${number(d.avgVol20)}</div>
+      </div>
+
+      <div class="metric">
+        <div class="label">RVOL 4S</div>
+        <div class="value">${ratio(d.rvol4)}</div>
+      </div>
+
+      <div class="metric">
+        <div class="label">RVOL 20S</div>
+        <div class="value">${ratio(d.rvol20)}</div>
+      </div>
+
+    </div>
+
+    <br>
+
     <table>
-      <tr><th>Referencia</th><th>Valor</th></tr>
-      <tr><td>Distancia al máximo semanal</td><td>${money(roomHigh)}</td></tr>
-      <tr><td>Distancia al mínimo semanal</td><td>${money(roomLow)}</td></tr>
-      <tr><td>Rango / precio</td><td>${pct(range/d.price*100)}</td></tr>
+
+      <tr>
+        <th>Referencia</th>
+        <th>Valor</th>
+      </tr>
+
+      <tr>
+        <td>Distancia al máximo semanal</td>
+        <td>${money(roomHigh)}</td>
+      </tr>
+
+      <tr>
+        <td>Distancia al mínimo semanal</td>
+        <td>${money(roomLow)}</td>
+      </tr>
+
+      <tr>
+        <td>Rango / precio</td>
+        <td>${pct(rangePct)}</td>
+      </tr>
+
+      <tr>
+        <td>Semanas recibidas</td>
+        <td>${d.weeks}</td>
+      </tr>
+
     </table>
+
   `;
 }
 
-function showDemo(){
-  const t = document.getElementById('ticker').value.trim().toUpperCase();
-  if(demo[t]) analyze(t,demo[t]);
-  else {
-    document.getElementById('result').innerHTML =
-      `<h2>${t || 'Ticker'}</h2><p class="notice">Este ticker todavía no está en los datos de demostración. En la V2 lo conectaremos a datos reales.</p>`;
+async function analyzeTicker(){
+
+  const ticker=document.getElementById("ticker").value.trim().toUpperCase();
+  const status=document.getElementById("status");
+  const result=document.getElementById("result");
+
+  if(!ticker){
+    status.innerHTML="Escribe un ticker.";
+    status.className="notice error";
+    return;
+  }
+
+  status.innerHTML="Consultando datos reales...";
+  status.className="notice";
+  result.innerHTML="<h2 class='loading'>Cargando datos de "+ticker+"...</h2>";
+
+  try{
+
+    const response=await fetch(
+      API_URL+"?symbol="+encodeURIComponent(ticker)
+    );
+
+    const data=await response.json();
+
+    if(!response.ok||data.status==="error"){
+      throw new Error(data.message||data.error||"Error de la fuente de datos.");
+    }
+
+    const processed=processData(data.values);
+
+    render(ticker,processed);
+
+    status.innerHTML=
+      "Datos reales cargados correctamente para "+ticker+".";
+    status.className="notice success";
+
+  }catch(error){
+
+    result.innerHTML=`
+      <h2>Error</h2>
+      <p class="notice error">${error.message}</p>
+    `;
+
+    status.innerHTML=
+      "No fue posible cargar los datos de "+ticker+".";
+    status.className="notice error";
   }
 }
-function loadExamples(){
-  let rows = Object.entries(demo).map(([t,d])=>{
-    const r=d.high-d.low, u=r/d.awr4*100;
-    return `<tr><td>${t}</td><td>${money(d.price)}</td><td>${money(d.awr4)}</td><td>${money(r)}</td><td>${pct(u)}</td><td>${money(Math.max(0,d.awr4-r))}</td></tr>`;
-  }).join('');
-  document.getElementById('result').innerHTML = `
-    <h2>Ejemplos</h2>
-    <table><tr><th>Ticker</th><th>Precio</th><th>AWR4</th><th>Rango actual</th><th>Consumido</th><th>Restante</th></tr>${rows}</table>
-  `;
+
+async function loadExamples(){
+
+  document.getElementById("ticker").value="NVDA";
+  await analyzeTicker();
+
 }
-showDemo();
+
+document.getElementById("ticker").addEventListener("keydown",function(e){
+  if(e.key==="Enter")analyzeTicker();
+});
+
+analyzeTicker();
+
 </script>
 </body>
 </html>
+```
