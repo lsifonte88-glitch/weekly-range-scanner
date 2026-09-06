@@ -1,127 +1,906 @@
-const TD="https://api.twelvedata.com";
-const CORS={
-"Access-Control-Allow-Origin":"*",
-"Access-Control-Allow-Methods":"GET,OPTIONS",
-"Access-Control-Allow-Headers":"Content-Type"
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Weekly Range Scanner PRO</title>
+
+<style>
+*{box-sizing:border-box}
+
+body{
+margin:0;
+background:#080d18;
+color:#e8edf7;
+font-family:Arial,sans-serif
+}
+
+.wrap{
+max-width:1500px;
+margin:auto;
+padding:25px
+}
+
+h1{
+margin:0;
+font-size:30px
+}
+
+.sub{
+color:#8f9bb2;
+margin:7px 0 22px
+}
+
+.panel{
+background:#111a2c;
+border:1px solid #263552;
+border-radius:12px;
+padding:18px;
+margin-bottom:18px
+}
+
+.controls{
+display:flex;
+gap:10px;
+flex-wrap:wrap
+}
+
+input{
+flex:1;
+min-width:300px;
+background:#080d18;
+border:1px solid #354463;
+color:white;
+border-radius:8px;
+padding:13px;
+font-size:15px
+}
+
+button{
+background:#2d6cdf;
+color:white;
+border:0;
+border-radius:8px;
+padding:12px 18px;
+font-weight:bold;
+cursor:pointer
+}
+
+button:hover{
+opacity:.9
+}
+
+.status{
+margin-top:12px;
+color:#9ba8bf
+}
+
+.table-wrap{
+overflow-x:auto
+}
+
+table{
+width:100%;
+border-collapse:collapse;
+min-width:1200px
+}
+
+th{
+color:#8f9bb2;
+font-size:12px;
+text-align:left;
+padding:12px 9px;
+border-bottom:1px solid #2a3752;
+white-space:nowrap
+}
+
+td{
+padding:12px 9px;
+border-bottom:1px solid #202c45;
+font-size:13px;
+vertical-align:top
+}
+
+tr:hover{
+background:#151f34
+}
+
+.symbol{
+font-weight:bold;
+font-size:15px
+}
+
+.price{
+font-weight:bold;
+font-size:15px
+}
+
+.green{
+color:#62d99b
+}
+
+.red{
+color:#ff7777
+}
+
+.yellow{
+color:#ffd166
+}
+
+.gray{
+color:#8f9bb2
+}
+
+.badge{
+display:inline-block;
+padding:4px 7px;
+border-radius:5px;
+background:#1b2942
+}
+
+.score{
+font-size:16px;
+font-weight:bold
+}
+
+.move-main{
+font-weight:bold
+}
+
+.move-sub{
+font-size:11px;
+color:#8f9bb2;
+margin-top:4px
+}
+
+.loading{
+text-align:center;
+padding:30px;
+color:#8f9bb2
+}
+
+@media(max-width:700px){
+
+.wrap{
+padding:12px
+}
+
+h1{
+font-size:23px
+}
+
+input{
+min-width:100%
+}
+
+}
+</style>
+</head>
+
+<body>
+
+<div class="wrap">
+
+<h1>Weekly Range Scanner PRO</h1>
+
+<div class="sub">
+Acciones y ETF de EE. UU. · datos reales · rango semanal · volumen · swing
+</div>
+
+<div class="panel">
+
+<div class="controls">
+
+<input
+id="symbols"
+value="NVDA,META,AMZN,GOOGL,UBER,NFLX,QQQM,PLTR"
+placeholder="Ejemplo: NVDA,META,AMZN"
+>
+
+<button onclick="analyze()">ANALIZAR</button>
+
+<button onclick="resetList()">LISTA INICIAL</button>
+
+</div>
+
+<div id="status" class="status">
+Preparado.
+</div>
+
+</div>
+
+<div class="panel">
+
+<div class="table-wrap">
+
+<table>
+
+<thead>
+
+<tr>
+
+<th>SÍMBOLO</th>
+<th>PRECIO</th>
+<th>RANGO SEMANAL</th>
+<th>AWR 4S</th>
+<th>AWR 8S</th>
+<th>AWR 12S</th>
+<th>RVOL 20S</th>
+<th>TENDENCIA</th>
+<th>SWING SCORE</th>
+<th>MOVIMIENTO POR VOLUMEN</th>
+
+</tr>
+
+</thead>
+
+<tbody id="tbody">
+
+<tr>
+<td colspan="10" class="loading">
+Esperando análisis...
+</td>
+</tr>
+
+</tbody>
+
+</table>
+
+</div>
+
+</div>
+
+</div>
+
+<script>
+
+const API_URL="https://weekly-range-api.changowalu.workers.dev/api";
+
+const MAX_TICKERS=8;
+
+function n(x){
+return Number(x)||0;
+}
+
+function average(arr){
+
+if(!arr.length)return 0;
+
+return arr.reduce((a,b)=>a+b,0)/arr.length;
+
+}
+
+function getRows(data){
+
+if(!data)return [];
+
+if(Array.isArray(data))return data;
+
+if(Array.isArray(data.values))return data.values;
+
+return [];
+
+}
+
+function weeklyData(values){
+
+const weeks={};
+
+for(const bar of values){
+
+const date=new Date(bar.datetime);
+
+const day=date.getUTCDay();
+
+const diff=day===0?-6:1-day;
+
+date.setUTCDate(date.getUTCDate()+diff);
+
+const key=date.toISOString().slice(0,10);
+
+if(!weeks[key]){
+
+weeks[key]={
+high:-Infinity,
+low:Infinity,
+close:0
 };
 
-function json(x,status=200){
-return new Response(JSON.stringify(x),{
-status,
-headers:{"content-type":"application/json;charset=UTF-8",...CORS}
-});
 }
 
-async function td(path,env){
-const u=new URL(TD+path);
-u.searchParams.set("apikey",env.TWELVE_DATA_API_KEY);
-const r=await fetch(u);
-return await r.json();
-}
-
-function cleanSymbols(a){
-return [...new Set(a.map(x=>String(x.symbol||"").trim().toUpperCase()).filter(x=>/^[A-Z0-9.-]+$/.test(x)))];
-}
-
-async function universe(env){
-const [stocks,etfs]=await Promise.all([
-td("/stocks?country=United%20States",env),
-td("/etf",env)
-]);
-
-let a=Array.isArray(stocks.data)?stocks.data:[];
-let b=Array.isArray(etfs.data)?etfs.data:[];
-
-a=a.filter(x=>
-String(x.country||"").toLowerCase()==="united states" &&
-String(x.currency||"").toUpperCase()==="USD" &&
-String(x.type||"").toLowerCase().includes("stock")
+weeks[key].high=Math.max(
+weeks[key].high,
+n(bar.high)
 );
 
-b=b.filter(x=>
-String(x.currency||"").toUpperCase()==="USD"
+weeks[key].low=Math.min(
+weeks[key].low,
+n(bar.low)
 );
 
-let symbols=cleanSymbols([...a,...b])
+weeks[key].close=n(bar.close);
+
+}
+
+return Object.values(weeks)
+
+.filter(x=>x.high>-Infinity&&x.low<Infinity)
+
+.map(x=>({
+
+high:x.high,
+low:x.low,
+close:x.close,
+
+range:x.high-x.low,
+
+pct:x.low>0
+?((x.high-x.low)/x.low)*100
+:0
+
+}));
+
+}
+
+function ema(values,length){
+
+if(values.length<length)return null;
+
+let e=average(values.slice(0,length));
+
+const k=2/(length+1);
+
+for(let i=length;i<values.length;i++){
+
+e=
+values[i]*k+
+e*(1-k);
+
+}
+
+return e;
+
+}
+
+function percentile(values,p){
+
+if(!values.length)return 0;
+
+const a=[...values].sort((x,y)=>x-y);
+
+const index=(a.length-1)*p;
+
+const low=Math.floor(index);
+
+const high=Math.ceil(index);
+
+if(low===high)return a[low];
+
+return a[low]+
+(a[high]-a[low])*
+(index-low);
+
+}
+
+function movementByVolume(values,current){
+
+const movements=[];
+
+for(let i=20;i<values.length;i++){
+
+const previous=values.slice(i-20,i);
+
+const avgVolume=
+average(
+previous.map(x=>n(x.volume))
+);
+
+if(!avgVolume)continue;
+
+const rvol=
+n(values[i].volume)/
+avgVolume;
+
+if(rvol<0.70||rvol>1.50)continue;
+
+const start=Math.max(0,i-4);
+
+const week=
+values.slice(start,i+1);
+
+if(week.length<2)continue;
+
+const high=Math.max(
+...week.map(x=>n(x.high))
+);
+
+const low=Math.min(
+...week.map(x=>n(x.low))
+);
+
+if(low<=0)continue;
+
+const pct=
+((high-low)/low)*100;
+
+if(pct>0&&pct<100){
+
+movements.push(pct);
+
+}
+
+}
+
+if(movements.length<5){
+
+return `
+<span class="gray">
+Historial insuficiente
+</span>
+`;
+
+}
+
+const p50=percentile(movements,.50);
+
+const p75=percentile(movements,.75);
+
+const price50=
+current*(1+p50/100);
+
+const price75=
+current*(1+p75/100);
+
+return `
+
+<div class="move-main green">
+
+$${current.toFixed(2)}
+→
+$${price50.toFixed(2)}
+
+(+${p50.toFixed(1)}%)
+
+</div>
+
+<div class="move-sub">
+
+P75:
+<span class="yellow">
+$${price75.toFixed(2)}
+(+${p75.toFixed(1)}%)
+</span>
+
+</div>
+
+<div class="move-sub">
+
+${movements.length} semanas comparables
+
+</div>
+
+`;
+
+}
+
+function calculate(symbol,values){
+
+if(values.length<30)return null;
+
+const closes=
+values.map(x=>n(x.close));
+
+const current=
+closes[closes.length-1];
+
+const weeks=
+weeklyData(values);
+
+if(!weeks.length)return null;
+
+const lastWeek=
+weeks[weeks.length-1];
+
+function awr(length){
+
+const data=
+weeks.slice(-length);
+
+return average(
+data.map(x=>x.pct)
+);
+
+}
+
+const awr4=awr(4);
+
+const awr8=awr(8);
+
+const awr12=awr(12);
+
+const weeklyRange=
+lastWeek.pct;
+
+const volumes=
+values.map(x=>n(x.volume));
+
+const currentVolume=
+volumes[volumes.length-1];
+
+const avgVolume=
+average(
+volumes.slice(-20)
+);
+
+const rvol=
+avgVolume
+?currentVolume/avgVolume
+:0;
+
+const ema20=
+ema(closes,20);
+
+const ema50=
+ema(closes,50);
+
+const ema200=
+ema(closes,200);
+
+let trend="Neutral";
+
+if(ema20&&ema50&&ema200){
+
+if(
+current>ema20&&
+ema20>ema50&&
+ema50>ema200
+){
+
+trend="Alcista fuerte";
+
+}
+
+else if(
+current>ema20&&
+ema20>ema50
+){
+
+trend="Alcista";
+
+}
+
+else if(
+current<ema20&&
+ema20<ema50&&
+ema50<ema200
+){
+
+trend="Bajista fuerte";
+
+}
+
+else if(
+current<ema20&&
+ema20<ema50
+){
+
+trend="Bajista";
+
+}
+
+}
+
+let score=0;
+
+if(ema20&&current>ema20)
+score+=15;
+
+if(ema20&&ema50&&ema20>ema50)
+score+=15;
+
+if(ema50&&ema200&&ema50>ema200)
+score+=15;
+
+if(rvol>=1)
+score+=15;
+
+if(weeklyRange>=awr4)
+score+=10;
+
+const previous=
+closes.slice(-21,-1);
+
+if(
+previous.length&&
+current>Math.max(...previous)
+){
+
+score+=15;
+
+}
+
+if(weeklyRange>=5)
+score+=10;
+
+return {
+
+symbol,
+current,
+weeklyRange,
+awr4,
+awr8,
+awr12,
+rvol,
+trend,
+score,
+
+movement:
+movementByVolume(
+values,
+current
+)
+
+};
+
+}
+
+async function getTicker(symbol){
+
+const url=
+API_URL+
+"?symbol="+
+encodeURIComponent(symbol);
+
+const response=
+await fetch(url);
+
+if(!response.ok){
+
+throw new Error(
+"HTTP "+response.status
+);
+
+}
+
+const data=
+await response.json();
+
+if(data.status==="error"){
+
+throw new Error(
+data.message||"Error API"
+);
+
+}
+
+return calculate(
+symbol,
+getRows(data)
+);
+
+}
+
+function render(results){
+
+const tbody=
+document.getElementById("tbody");
+
+if(!results.length){
+
+tbody.innerHTML=`
+
+<tr>
+
+<td colspan="10" class="loading">
+
+No se encontraron datos.
+
+</td>
+
+</tr>
+
+`;
+
+return;
+
+}
+
+tbody.innerHTML=
+results.map(x=>{
+
+let trendClass="";
+
+if(x.trend.includes("Alcista"))
+trendClass="green";
+
+if(x.trend.includes("Bajista"))
+trendClass="red";
+
+return `
+
+<tr>
+
+<td>
+
+<div class="symbol">
+${x.symbol}
+</div>
+
+</td>
+
+<td>
+
+<div class="price">
+$${x.current.toFixed(2)}
+</div>
+
+</td>
+
+<td>
+
+${x.weeklyRange.toFixed(1)}%
+
+</td>
+
+<td>
+
+${x.awr4.toFixed(1)}%
+
+</td>
+
+<td>
+
+${x.awr8.toFixed(1)}%
+
+</td>
+
+<td>
+
+${x.awr12.toFixed(1)}%
+
+</td>
+
+<td>
+
+${x.rvol.toFixed(2)}x
+
+</td>
+
+<td>
+
+<span class="badge ${trendClass}">
+${x.trend}
+</span>
+
+</td>
+
+<td>
+
+<span class="score">
+${x.score}/100
+</span>
+
+</td>
+
+<td>
+
+${x.movement}
+
+</td>
+
+</tr>
+
+`;
+
+}).join("");
+
+}
+
+async function analyze(){
+
+const input=
+document.getElementById("symbols").value;
+
+const symbols=
+[...new Set(
+
+input
+.toUpperCase()
+.split(",")
+.map(x=>x.trim())
+.filter(Boolean)
+
+)]
+
 .filter(x=>x!=="MSFT")
-.sort();
+.slice(0,MAX_TICKERS);
 
-return [...new Set(symbols)];
+if(!symbols.length){
+
+document.getElementById("status").textContent=
+"Introduce al menos un símbolo.";
+
+return;
+
 }
 
-async function series(symbols,env){
-const u=new URL(TD+"/time_series");
-u.searchParams.set("symbol",symbols.join(","));
-u.searchParams.set("interval","1day");
-u.searchParams.set("outputsize","320");
-u.searchParams.set("order","asc");
-u.searchParams.set("timezone","America/New_York");
-u.searchParams.set("apikey",env.TWELVE_DATA_API_KEY);
+const tbody=
+document.getElementById("tbody");
 
-const r=await fetch(u);
-return await r.json();
-}
+tbody.innerHTML=`
 
-export default{
-async fetch(req,env){
-if(req.method==="OPTIONS")return new Response(null,{headers:CORS});
+<tr>
+
+<td colspan="10" class="loading">
+
+Analizando datos reales...
+
+</td>
+
+</tr>
+
+`;
+
+document.getElementById("status").textContent=
+"Analizando "+symbols.length+" símbolos...";
+
+const results=[];
+
+for(const symbol of symbols){
 
 try{
-const u=new URL(req.url);
 
-if(u.pathname==="/universe"){
-const key="https://weekly-range-api/universe-cache";
-const cache=caches.default;
-let hit=await cache.match(key);
+document.getElementById("status").textContent=
+"Analizando "+symbol+"...";
 
-```
-if(hit)return hit;
+const result=
+await getTicker(symbol);
 
-const symbols=await universe(env);
-const response=json({count:symbols.length,symbols});
+if(result){
 
-const copy=response.clone();
-await cache.put(key,copy);
-return response;
-```
+results.push(result);
 
 }
 
-if(u.pathname==="/api"){
-let list=u.searchParams.get("symbols");
+}catch(error){
 
-```
-if(!list){
- const one=u.searchParams.get("symbol");
- if(!one)return json({status:"error",message:"Falta symbol o symbols"},400);
- list=one;
-}
-
-let symbols=[...new Set(
- list.split(",")
-  .map(x=>x.trim().toUpperCase())
-  .filter(Boolean)
-)].slice(0,8);
-
-if(!symbols.length)return json({status:"error",message:"Sin símbolos"},400);
-
-const data=await series(symbols,env);
-return json(data);
-```
+console.error(
+symbol,
+error
+);
 
 }
 
-return json({
-status:"ok",
-message:"Weekly Range Scanner API",
-endpoints:["/universe","/api?symbols=NVDA,META"]
-});
+}
 
-}catch(e){
-return json({
-status:"error",
-message:e.message||String(e)
-},500);
+results.sort(
+(a,b)=>b.score-a.score
+);
+
+render(results);
+
+document.getElementById("status").textContent=
+"Listo · "+
+results.length+
+" símbolos analizados · datos reales";
+
 }
+
+function resetList(){
+
+document.getElementById("symbols").value=
+"NVDA,META,AMZN,GOOGL,UBER,NFLX,QQQM,PLTR";
+
+analyze();
+
 }
-};
+
+window.addEventListener(
+"load",
+()=>analyze()
+);
+
+</script>
+
+</body>
+</html>
