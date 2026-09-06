@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Weekly Range Scanner PRO</title>
+<style>
+body{margin:0;background:#0b1020;color:#e8edf7;font-family:Arial,sans-serif}
+.wrap{max-width:1400px;margin:auto;padding:24px}
+h1{margin:0 0 6px}.sub{color:#9aa6bd;margin-bottom:20px}
+.panel{background:#121a2d;border:1px solid #26324d;border-radius:12px;padding:16px;margin-bottom:16px}
+input{width:100%;box-sizing:border-box;background:#0b1020;color:#fff;border:1px solid #33415f;border-radius:8px;padding:12px;font-size:16px}
+button{margin-top:10px;margin-right:8px;padding:11px 15px;border:0;border-radius:8px;cursor:pointer;font-weight:bold}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:10px 8px;border-bottom:1px solid #26324d;text-align:left;vertical-align:top}
+th{color:#9aa6bd;white-space:nowrap}
+.green{color:#65d69a}.yellow{color:#ffd166}.red{color:#ff7d7d}
+.small{font-size:12px;color:#9aa6bd;margin-top:3px}
+.status{margin-top:10px;color:#9aa6bd}
+.badge{display:inline-block;padding:3px 6px;border-radius:5px;background:#1d2943}
+@media(max-width:900px){
+.wrap{padding:10px}
+table{font-size:11px}
+th,td{padding:7px 4px}
+.panel{overflow-x:auto}
+}
+</style>
+</head>
+
+<body>
+<div class="wrap">
+
+<h1>Weekly Range Scanner PRO</h1>
+<div class="sub">
+Acciones y ETF de EE. UU. · datos reales · rango semanal · volumen
+</div>
+
+<div class="panel">
+<input id="symbols" value="NVDA,META,AMZN,GOOGL,UBER,NFLX,QQQM,PLTR"
+placeholder="NVDA,META,AMZN...">
+
+<button onclick="analyze()">ANALIZAR</button>
+<button onclick="initial()">LISTA INICIAL</button>
+
+<div id="status" class="status">Cargando datos...</div>
+</div>
+
+<div class="panel">
+<table>
+<thead>
+<tr>
+<th>Símbolo</th>
+<th>Precio</th>
+<th>Rango semanal</th>
+<th>AWR 4S</th>
+<th>AWR 8S</th>
+<th>AWR 12S</th>
+<th>RVOL 20S</th>
+<th>Tendencia</th>
+<th>Score Swing</th>
+<th>Movimiento por volumen</th>
+</tr>
+</thead>
+
+<tbody id="tbody"></tbody>
+</table>
+</div>
+
+</div>
+
+<script>
+
+const API_URL="https://weekly-range-api.changowalu.workers.dev/api";
+const MAX_TICKERS=8;
+
+function esc(s){
+return String(s).replace(/[&<>"']/g,m=>({
+"&":"&amp;",
+"<":"&lt;",
+">":"&gt;",
+'"':"&quot;",
+"'":"&#39;"
+}[m]));
+}
+
+function num(x){
+return Number(x)||0;
+}
+
+function avg(a){
+return a.length?a.reduce((x,y)=>x+y,0)/a.length:0;
+}
+
+function rows(data){
+if(!data)return [];
+if(Array.isArray(data))return data;
+if(Array.isArray(data.values))return data.values;
+return [];
+}
+
+function weeklyBars(v){
+
+const map={};
+
+for(const x of v){
+
+const d=new Date(x.datetime);
+const day=d.getUTCDay();
+
+const diff=day===0?-6:1-day;
+
+d.setUTCDate(d.getUTCDate()+diff);
+
+const key=d.toISOString().slice(0,10);
+
+if(!map[key]){
+map[key]={
+high:-Infinity,
+low:Infinity,
+close:0
+};
+}
+
+map[key].high=Math.max(map[key].high,num(x.high));
+map[key].low=Math.min(map[key].low,num(x.low));
+map[key].close=num(x.close);
+}
+
+return Object.values(map)
+.filter(x=>x.high>-Infinity&&x.low<Infinity)
+.map(x=>({
+
+range:x.high-x.low,
+
+pct:x.low>0
+?((x.high-x.low)/x.low)*100
+:0,
+
+close:x.close
+
+}))
+.sort((a,b)=>a.close-b.close);
+}
+
+function ema(values,n){
+
+if(values.length<n)return null;
+
+let e=avg(values.slice(0,n));
+
+const k=2/(n+1);
+
+for(let i=n;i<values.length;i++){
+e=values[i]*k+e*(1-k);
+}
+
+return e;
+}
+
+function percentile(a,p){
+
+if(!a.length)return 0;
+
+const s=[...a].sort((x,y)=>x-y);
+
+const i=(s.length-1)*p;
+
+const lo=Math.floor(i);
+const hi=Math.ceil(i);
+
+if(lo===hi)return s[lo];
+
+return s[lo]+(s[hi]-s[lo])*(i-lo);
+}
+
+/*
+Movimiento por volumen
+
+Busca semanas históricas donde el volumen relativo
+estuvo aproximadamente entre 0.70x y 1.50x.
+
+Después calcula el rango porcentual de esas semanas.
+
+P50 = movimiento histórico central.
+P75 = movimiento histórico fuerte.
+
+Los convierte a precio tomando el precio actual
+como punto de partida.
+*/
+
+function volumeMovement(v,current){
+
+const historical=[];
+
+for(let i=20;i<v.length;i++){
+
+const previous=v.slice(i-20,i);
+
+const avgVolume=avg(
+previous.map(x=>num(x.volume))
+);
+
+if(!avgVolume)continue;
+
+const relativeVolume=
+num(v[i].volume)/avgVolume;
+
+if(relativeVolume<0.70||
+relativeVolume>1.50)continue;
+
+const start=Math.max(0,i-4);
+
+const week=v.slice(start,i+1);
+
+if(week.length<2)continue;
+
+const high=Math.max(
+...week.map(x=>num(x.high))
+);
+
+const low=Math.min(
+...week.map(x=>num(x.low))
+);
+
+if(low<=0)continue;
+
+const rangePct=
+((high-low)/low)*100;
+
+if(rangePct>0&&rangePct<100){
+historical.push(rangePct);
+}
+}
+
+if(historical.length<5){
+
+return `
+<div class="small">
+Historial insuficiente
+</div>
+`;
+
+}
+
+const p50=percentile(historical,0.50);
+const p75=percentile(historical,0.75);
+
+const target50=
+current*(1+p50/100);
+
+const target75=
+current*(1+p75/100);
+
+return `
+<div>
+<b>$${current.toFixed(2)}
+→
+$${target50.toFixed(2)}</b>
+<span class="green">
+(+${p50.toFixed(1)}%)
+</span>
+</div>
+
+<div class="small">
+P75 →
+<b>$${target75.toFixed(2)}</b>
+<span class="green">
+(+${p75.toFixed(1)}%)
+</span>
+</div>
+
+<div class="small">
+${historical.length} semanas comparables
+</div>
+`;
+}
+
+function process(symbol,v){
+
+if(v.length<30)return null;
+
+const close=v.map(x=>num(x.close));
+
+const current=close.at(-1);
+
+const weeks=weeklyBars(v);
+
+if(!weeks.length)return null;
+
+const lastWeek=weeks.at(-1);
+
+const weeklyRange=lastWeek.pct;
+
+function awr(n){
+return avg(
+weeks.slice(-n).map(x=>x.pct)
+);
+}
+
+const awr4=awr(4);
+const awr8=awr(8);
+const awr12=awr(12);
+
+const volumes=v.map(x=>num(x.volume));
+
+const lastVolume=
+num(v.at(-1).volume);
+
+const averageVolume=
+avg(volumes.slice(-20));
+
+const rvol=
+averageVolume
+?lastVolume/averageVolume
+:0;
+
+const ema20=ema(close,20);
+const ema50=ema(close,50);
+const ema200=ema(close,200);
+
+let trend="Neutral";
+
+if(ema20&&ema50&&ema200){
+
+if(
+current>ema20&&
+ema20>ema50&&
+ema50>ema200
+){
+trend="Alcista fuerte";
+}
+
+else if(
+current>ema20&&
+ema20>ema50
+){
+trend="Alcista";
+}
+
+else if(
+current<ema20&&
+ema20<ema50&&
+ema50<ema200
+){
+trend="Bajista fuerte";
+}
+
+else if(
+current<ema20&&
+ema20<ema50
+){
+trend="Bajista";
+}
+
+}
+
+let score=0;
+
+if(ema20&&current>ema20)score+=15;
+
+if(ema20&&ema50&&ema20>ema50)score+=15;
+
+if(ema50&&ema200&&ema50>ema200)score+=15;
+
+if(rvol>=1)score+=15;
+
+if(weeklyRange>=awr4)score+=10;
+
+const previous20=close.slice(-21,-1);
+
+if(
+previous20.length&&
+current>Math.max(...previous20)
+){
+score+=15;
+}
+
+if(weeklyRange>=5)score+=10;
+
+return {
+
+symbol,
+current,
+weeklyRange,
+awr4,
+awr8,
+awr12,
+rvol,
+trend,
+score,
+movement:volumeMovement(v,current)
+
+};
+
+}
+
+async function fetchTicker(symbol){
+
+const url=
+API_URL+
+"?symbol="+
+encodeURIComponent(symbol);
+
+const response=
+await fetch(url);
+
+const data=
+await response.json();
+
+if(data.status==="error"){
+throw new Error(
+data.message||"Error de API"
+);
+}
+
+const values=rows(data);
+
+return process(symbol,values);
+
+}
+
+function render(list){
+
+const tbody=
+document.getElementById("tbody");
+
+tbody.innerHTML=list.map(d=>`
+
+<tr>
+
+<td>
+<b>${esc(d.symbol)}</b>
+</td>
+
+<td>
+<b>$${d.current.toFixed(2)}</b>
+</td>
+
+<td>
+${d.weeklyRange.toFixed(1)}%
+</td>
+
+<td>
+${d.awr4.toFixed(1)}%
+</td>
+
+<td>
+${d.awr8.toFixed(1)}%
+</td>
+
+<td>
+${d.awr12.toFixed(1)}%
+</td>
+
+<td>
+${d.rvol.toFixed(2)}x
+</td>
+
+<td>
+<span class="badge">
+${d.trend}
+</span>
+</td>
+
+<td>
+<b>${d.score}</b>
+</td>
+
+<td>
+${d.movement}
+</td>
+
+</tr>
+
+`).join("");
+
+}
+
+async function analyze(){
+
+const input=
+document.getElementById("symbols").value;
+
+const symbols=[
+...new Set(
+input
+.toUpperCase()
+.split(",")
+.map(x=>x.trim())
+.filter(Boolean)
+)
+]
+.filter(x=>x!=="MSFT")
+.slice(0,MAX_TICKERS);
+
+if(!symbols.length){
+
+document.getElementById("status").textContent=
+"Introduce al menos un símbolo.";
+
+return;
+}
+
+document.getElementById("status").textContent=
+"Analizando "+symbols.length+" símbolos...";
+
+const results=[];
+
+for(const symbol of symbols){
+
+try{
+
+const result=
+await fetchTicker(symbol);
+
+if(result){
+results.push(result);
+}
+
+}
+
+catch(error){
+
+console.error(symbol,error);
+
+}
+
+}
+
+results.sort(
+(a,b)=>b.score-a.score
+);
+
+render(results);
+
+document.getElementById("status").textContent=
+"Listo · "+
+results.length+
+" símbolos analizados con datos reales.";
+
+}
+
+function initial(){
+
+document.getElementById("symbols").value=
+"NVDA,META,AMZN,GOOGL,UBER,NFLX,QQQM,PLTR";
+
+analyze();
+
+}
+
+initial();
+
+</script>
+
+</body>
+</html>
