@@ -1,8 +1,8 @@
 /* =========================
-   SCORE SWING FINAL
+   SCORE SWING DEFINITIVO V3
    PRIORIDAD:
    1. TENDENCIA
-   2. AWR
+   2. AWR SALUDABLE
    3. RVOL
    4. ESPACIO
    5. AMPLITUD
@@ -10,21 +10,26 @@
 
 let score=0;
 
-/* 1. TENDENCIA — 40 PUNTOS */
+/* =========================
+   1. TENDENCIA — 30 PUNTOS
+   ========================= */
+
 if(price>ema20){
-  score+=15;
+  score+=10;
 }
 
 if(ema20&&ema50&&ema20>ema50){
-  score+=12;
+  score+=10;
 }
 
 if(ema50&&ema200&&ema50>ema200){
-  score+=13;
+  score+=10;
 }
 
-/* 2. AWR — 30 PUNTOS
-   EL AWR AHORA ES MUCHO MÁS ESTRICTO */
+/* =========================
+   2. AWR SALUDABLE — 30 PUNTOS
+   ========================= */
+
 if(used!==null){
 
   if(used>=40&&used<=60){
@@ -34,60 +39,75 @@ if(used!==null){
     score+=28;
   }
   else if(used>70&&used<=80){
-    score+=20;
+    score+=22;
   }
   else if(used>80&&used<=90){
-    score+=10;
+    score+=12;
   }
   else if(used>90&&used<=100){
-    score+=0;
+    score+=3;
   }
   else if(used<40){
     score+=20;
   }
+
 }
 
-/* 3. RVOL — 15 PUNTOS */
+/* =========================
+   3. RVOL — 20 PUNTOS
+   ========================= */
+
 if(rvol20!==null){
 
   if(rvol20>=1.50){
-    score+=15;
+    score+=20;
   }
   else if(rvol20>=1.25){
-    score+=13;
+    score+=17;
   }
   else if(rvol20>=1.00){
-    score+=11;
+    score+=14;
   }
   else if(rvol20>=0.85){
-    score+=7;
+    score+=9;
   }
   else if(rvol20>=0.70){
-    score+=3;
+    score+=4;
   }
+
 }
 
-/* 4. ESPACIO AL MÁXIMO — 10 PUNTOS */
+/* =========================
+   4. ESPACIO AL MÁXIMO — 15 PUNTOS
+   ========================= */
+
 if(roomHighPct!==null){
 
   if(roomHighPct>=4&&roomHighPct<=8){
-    score+=10;
+    score+=15;
   }
   else if(roomHighPct>=3&&roomHighPct<4){
-    score+=8;
+    score+=12;
   }
   else if(roomHighPct>8&&roomHighPct<=15){
-    score+=7;
+    score+=10;
   }
   else if(roomHighPct>15){
-    score+=5;
+    score+=7;
   }
   else if(roomHighPct>=1&&roomHighPct<3){
-    score+=3;
+    score+=5;
   }
+  else if(roomHighPct<1){
+    score+=0;
+  }
+
 }
 
-/* 5. AMPLITUD — 5 PUNTOS */
+/* =========================
+   5. AMPLITUD — 5 PUNTOS
+   ========================= */
+
 if(rangePct!==null){
 
   if(rangePct>=6){
@@ -102,9 +122,13 @@ if(rangePct!==null){
   else if(rangePct>=1.5){
     score+=1;
   }
+
 }
 
-/* PENALIZACIÓN DE TENDENCIA */
+/* =========================
+   PENALIZACIÓN DE TENDENCIA
+   ========================= */
+
 if(trend==="Bajista fuerte"){
   score-=20;
 }
@@ -115,9 +139,14 @@ else if(trend==="Neutral"){
   score-=5;
 }
 
-/* PROTECCIÓN AWR:
-   UNA ACCIÓN MUY EXTENDIDA
-   NO PUEDE GANAR EL RANKING */
+/* =========================
+   PROTECCIÓN AWR
+   EVITA QUE UNA ACCIÓN
+   DEMASIADO EXTENDIDA
+   APAREZCA ARTIFICIALMENTE
+   COMO BUENA OPORTUNIDAD
+   ========================= */
+
 if(used>100){
   score=Math.min(score,35);
 }
@@ -125,12 +154,18 @@ else if(used>90){
   score=Math.min(score,55);
 }
 
-/* RVOL DEMASIADO BAJO */
+/* =========================
+   PROTECCIÓN RVOL
+   ========================= */
+
 if(rvol20!==null&&rvol20<0.70){
   score-=5;
 }
 
-/* LIMITAR SCORE */
+/* =========================
+   LIMITAR SCORE
+   ========================= */
+
 if(score<0){
   score=0;
 }
