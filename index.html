@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -75,9 +76,9 @@ Puedes escribir hasta 8 acciones o ETF separados por comas.
 <div class="card">
 <h2>Cómo funciona el Score Swing</h2>
 <p class="small">
-El score ahora penaliza fuertemente una acción cuando ya consumió demasiado
-de su rango semanal. También considera tendencia EMA 20/50/200, RVOL,
-espacio disponible, amplitud del rango y momentum.
+El score prioriza una combinación de tendencia alcista, volumen relativo,
+rango semanal saludable y espacio disponible. Penaliza fuertemente las
+acciones que ya consumieron demasiado de su rango semanal.
 </p>
 </div>
 
@@ -291,122 +292,133 @@ trend="Bajista";
 }
 
 /* =========================
-   SCORE SWING NUEVO
-   MÁXIMO 100 PUNTOS
+   SCORE SWING V2
+   PRIORIDAD:
+   TENDENCIA + AWR SALUDABLE +
+   VOLUMEN + ESPACIO
+   MÁXIMO 100
    ========================= */
 
 let score=0;
 
-/* TENDENCIA = 35 puntos */
+/* TENDENCIA = 30 PUNTOS */
 
 if(price>ema20){
-score+=12;
+score+=10;
 }
 
 if(ema20&&ema50&&ema20>ema50){
-score+=12;
+score+=10;
 }
 
 if(ema50&&ema200&&ema50>ema200){
-score+=11;
+score+=10;
 }
 
-/* RVOL = 20 puntos */
+/* RVOL = 25 PUNTOS */
 
 if(rvol20!==null){
 
 if(rvol20>=1.50){
-score+=20;
+score+=25;
 }
 else if(rvol20>=1.25){
-score+=16;
+score+=21;
 }
 else if(rvol20>=1.00){
-score+=12;
+score+=17;
 }
 else if(rvol20>=0.85){
-score+=6;
+score+=10;
 }
-else{
-score+=0;
-}
-
+else if(rvol20>=0.70){
+score+=4;
 }
 
-/* AWR CONSUMIDO = 25 puntos
+}
 
-   40-70% = zona ideal
-   70-85% = todavía aceptable
-   85-100% = penalización
-   >100% = penalización fuerte
+/* AWR = 30 PUNTOS
+
+40-60% = excelente
+60-75% = muy buena
+75-85% = aceptable
+85-95% = débil
+95-100% = muy débil
+>100% = sobreextendida
 */
 
 if(used!==null){
 
-if(used>=40&&used<=70){
-score+=25;
+if(used>=40&&used<=60){
+score+=30;
 }
-else if(used>70&&used<=80){
+else if(used>60&&used<=75){
+score+=27;
+}
+else if(used>75&&used<=85){
 score+=18;
 }
-else if(used>80&&used<=90){
-score+=10;
+else if(used>85&&used<=95){
+score+=8;
 }
-else if(used>90&&used<=100){
-score+=3;
+else if(used>95&&used<=100){
+score+=2;
 }
 else if(used>100){
-score-=8;
+score-=15;
 }
 
 }
 
-/* RANGO / PRECIO = 10 puntos */
+/* RANGO / PRECIO = 5 PUNTOS */
 
 if(rangePct!==null){
 
 if(rangePct>=6){
-score+=10;
-}
-else if(rangePct>=4){
-score+=8;
-}
-else if(rangePct>=2.5){
 score+=5;
 }
-else if(rangePct>=1.5){
+else if(rangePct>=4){
+score+=4;
+}
+else if(rangePct>=2.5){
 score+=2;
 }
+else if(rangePct>=1.5){
+score+=1;
+}
 
 }
 
-/* ESPACIO AL MÁXIMO SEMANAL = 10 puntos */
+/* ESPACIO AL MÁXIMO = 10 PUNTOS */
 
 if(roomHighPct!==null){
 
-if(roomHighPct>=3&&roomHighPct<=8){
+if(roomHighPct>=4&&roomHighPct<=8){
 score+=10;
+}
+else if(roomHighPct>=3&&roomHighPct<4){
+score+=8;
 }
 else if(roomHighPct>8&&roomHighPct<=15){
 score+=7;
 }
 else if(roomHighPct>15){
-score+=4;
+score+=5;
 }
-else if(roomHighPct<3&&used>80){
-score-=5;
-}
-
+else if(roomHighPct<3){
+score+=2;
 }
 
-/* PENALIZACIONES IMPORTANTES */
+}
+
+/* PENALIZACIONES ADICIONALES */
 
 if(used>100){
 score-=15;
 }
 
 if(used>120){
-score-=10;
+score-=15;
 }
 
 if(rvol20!==null&&rvol20<0.70){
@@ -420,7 +432,7 @@ else if(trend==="Bajista"){
 score-=10;
 }
 else if(trend==="Neutral"){
-score-=5;
+score-=3;
 }
 
 if(score<0)score=0;
@@ -761,3 +773,4 @@ loadDefault();
 
 </body>
 </html>
+```
