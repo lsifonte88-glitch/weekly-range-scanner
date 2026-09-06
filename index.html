@@ -7,38 +7,31 @@
 <title>Weekly Range Scanner PRO</title>
 <style>
 *{box-sizing:border-box}
-body{margin:0;font-family:Arial,Helvetica,sans-serif;background:#07101d;color:#e8eef7}
-.wrap{max-width:1900px;margin:auto;padding:24px}
+body{margin:0;background:#0b1020;color:#e8edf7;font-family:Arial,sans-serif}
+.wrap{max-width:1800px;margin:auto;padding:22px}
 h1{margin:0 0 6px;font-size:28px}
-.sub{color:#91a0b5;margin-bottom:20px}
-.card{background:#0d1726;border:1px solid #1d2b40;border-radius:14px;padding:18px;margin-bottom:18px}
+.sub{color:#9aa7bd;margin-bottom:20px}
+.panel{background:#121a2d;border:1px solid #26334d;border-radius:14px;padding:16px;margin-bottom:18px}
 .controls{display:flex;gap:10px;flex-wrap:wrap}
-input{background:#08111e;border:1px solid #2a3b55;color:#fff;padding:12px;border-radius:8px;min-width:350px;font-size:14px;text-transform:uppercase}
-button{background:#2563eb;border:0;color:#fff;padding:12px 18px;border-radius:8px;font-weight:700;cursor:pointer}
+input{flex:1;min-width:320px;background:#0b1020;color:#fff;border:1px solid #34415c;border-radius:8px;padding:12px;font-size:15px}
+button{background:#2563eb;color:#fff;border:0;border-radius:8px;padding:12px 18px;font-weight:bold;cursor:pointer}
 button:hover{opacity:.9}
 button.secondary{background:#334155}
-.notice{color:#aebbd0;font-size:13px;line-height:1.5}
-.status{margin-top:12px;font-size:13px;color:#93a0b3}
+.status{margin-top:12px;color:#aab6ca}
 .table-wrap{overflow:auto}
-table{width:100%;border-collapse:collapse;min-width:1800px}
-th,td{padding:10px 8px;border-bottom:1px solid #1d2b40;text-align:right;white-space:nowrap}
-th{color:#8fa0b7;font-size:11px;position:sticky;top:0;background:#0d1726;z-index:2}
-th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}
-td{font-size:12px}
-.ticker{font-weight:800;font-size:14px}
-.good{color:#4ade80;font-weight:700}
-.warn{color:#facc15;font-weight:700}
-.bad{color:#fb7185;font-weight:700}
+table{width:100%;border-collapse:collapse;min-width:1500px}
+th,td{padding:10px 8px;border-bottom:1px solid #26334d;text-align:center;white-space:nowrap}
+th{background:#18233a;color:#b9c6dc;font-size:12px;position:sticky;top:0}
+td{font-size:13px}
+.ticker{font-weight:bold;color:#fff}
+.score{font-size:17px;font-weight:bold}
+.good{color:#4ade80}
+.warn{color:#facc15}
+.bad{color:#f87171}
 .neutral{color:#94a3b8}
-.score{font-size:16px;font-weight:800}
-.movement{line-height:1.4;text-align:left!important}
-.movement-main{font-weight:800}
-.movement-small{font-size:10px;color:#7f8da1}
-.loading{color:#60a5fa}
-.error{color:#fb7185}
-.legend{font-size:12px;color:#8fa0b7;line-height:1.7}
-.highlight{background:#101e31}
-footer{color:#65758c;font-size:11px;margin-top:18px}
+.explain{line-height:1.6;color:#b9c6dc;font-size:13px}
+.error{color:#f87171;font-weight:bold}
+.small{font-size:11px;color:#8190a8}
 </style>
 </head>
 
@@ -46,26 +39,18 @@ footer{color:#65758c;font-size:11px;margin-top:18px}
 <div class="wrap">
 
 <h1>Weekly Range Scanner PRO</h1>
-<div class="sub">
-Rango semanal + AWR + RVOL + tendencia + Score Swing + movimiento estadístico por volumen
+<div class="sub">Rango semanal · AWR · RVOL · Tendencia · Score Swing V3 · Movimiento por volumen</div>
+
+<div class="panel">
+  <div class="controls">
+    <input id="tickers" value="NVDA,META,AMZN,GOOGL,UBER,NFLX,QQQM,PLTR" placeholder="Ejemplo: NVDA,META,AMZN">
+    <button onclick="analyzeAll()">Analizar todos</button>
+    <button class="secondary" onclick="setInitial()">Lista inicial</button>
+  </div>
+  <div id="status" class="status">Listo.</div>
 </div>
 
-<div class="card">
-<div class="controls">
-<input id="tickers" value="NVDA,META,AMZN,GOOGL,UBER,NFLX,QQQM,PLTR">
-<button onclick="analyzeAll()">Analizar todos</button>
-<button class="secondary" onclick="loadDefault()">Lista inicial</button>
-</div>
-
-<p class="notice">
-Datos reales mediante Cloudflare Worker + Twelve Data.
-Máximo 8 símbolos por análisis.
-</p>
-
-<div id="status" class="status">Preparado.</div>
-</div>
-
-<div class="card">
+<div class="panel">
 <div class="table-wrap">
 <table>
 <thead>
@@ -90,970 +75,510 @@ Máximo 8 símbolos por análisis.
 <th>Movimiento por volumen</th>
 </tr>
 </thead>
-<tbody id="results">
-<tr>
-<td colspan="18" style="text-align:center;padding:30px">
-Pulsa "Analizar todos"
-</td>
-</tr>
-</tbody>
+<tbody id="results"></tbody>
 </table>
 </div>
 </div>
 
-<div class="card">
-<h3 style="margin-top:0">Movimiento estadístico por volumen</h3>
-
-<div class="legend">
-<b>P25</b> = movimiento semanal relativamente bajo dentro de las semanas comparables.<br>
-<b>Mediana</b> = movimiento semanal típico.<br>
-<b>P75</b> = movimiento semanal alto observado históricamente con volumen parecido.<br><br>
-
-El cálculo busca semanas históricas cuyo RVOL fue parecido al RVOL actual.
-La muestra indica cuántas semanas se utilizaron.
+<div class="panel explain">
+<b>Score Swing V3</b><br>
+30 puntos Tendencia · 30 puntos AWR saludable · 20 puntos RVOL ·
+15 puntos espacio al máximo · 5 puntos amplitud.<br>
+Después se aplican penalizaciones por tendencia, extensión excesiva del AWR y RVOL bajo.
 </div>
-</div>
-
-<footer>
-Weekly Range Scanner PRO — datos de mercado mediante Cloudflare Worker
-</footer>
 
 </div>
 
 <script>
-
 const API_URL="https://weekly-range-api.changowalu.workers.dev/api";
 const MAX_TICKERS=8;
 
-function valid(v){
-return Number.isFinite(v);
+function setInitial(){
+  document.getElementById("tickers").value="NVDA,META,AMZN,GOOGL,UBER,NFLX,QQQM,PLTR";
+  analyzeAll();
 }
 
 function num(v){
-return Number(v);
+  if(v===null||v===undefined||v==="") return null;
+  const n=Number(v);
+  return Number.isFinite(n)?n:null;
 }
 
-function money(v){
-return valid(v)
-?"$"+v.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})
-:"—";
+function avg(a){
+  const x=a.filter(v=>Number.isFinite(v));
+  return x.length?x.reduce((s,v)=>s+v,0)/x.length:null;
 }
 
 function pct(v){
-return valid(v)?v.toFixed(1)+"%":"—";
+  return v===null||!Number.isFinite(v)?"—":v.toFixed(1)+"%";
 }
 
-function x(v){
-return valid(v)?v.toFixed(2)+"x":"—";
+function price(v){
+  return v===null||!Number.isFinite(v)?"—":"$"+v.toFixed(2);
 }
 
-function avg(arr){
-const a=arr.filter(valid);
-return a.length?a.reduce((s,v)=>s+v,0)/a.length:null;
+function rvol(v){
+  return v===null||!Number.isFinite(v)?"—":v.toFixed(2)+"x";
 }
 
-function percentile(arr,p){
-const a=arr.filter(valid).sort((a,b)=>a-b);
+function esc(s){
+  return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+}
 
-if(!a.length)return null;
-if(a.length===1)return a[0];
-
-const i=(a.length-1)*p;
-const l=Math.floor(i);
-const u=Math.ceil(i);
-
-return l===u?a[l]:a[l]+(a[u]-a[l])*(i-l);
+function isoWeekKey(date){
+  const d=new Date(Date.UTC(date.getFullYear(),date.getMonth(),date.getDate()));
+  const day=d.getUTCDay()||7;
+  d.setUTCDate(d.getUTCDate()+4-day);
+  const y=d.getUTCFullYear();
+  const yearStart=new Date(Date.UTC(y,0,1));
+  const week=Math.ceil((((d-yearStart)/86400000)+1)/7);
+  return y+"-"+String(week).padStart(2,"0");
 }
 
 function ema(values,length){
-
-if(!values.length)return null;
-
-if(values.length<length)
-return avg(values);
-
-const m=2/(length+1);
-
-let r=avg(values.slice(0,length));
-
-for(let i=length;i<values.length;i++)
-r=(values[i]-r)*m+r;
-
-return r;
+  if(values.length<length) return null;
+  let e=avg(values.slice(0,length));
+  const k=2/(length+1);
+  for(let i=length;i<values.length;i++) e=values[i]*k+e*(1-k);
+  return e;
 }
 
-function weekKey(date){
+/* =========================
+   SCORE SWING V3
+   PRIORIDAD:
+   1 TENDENCIA
+   2 AWR SALUDABLE
+   3 RVOL
+   4 ESPACIO
+   5 AMPLITUD
+========================= */
+function calculateScore(priceValue,ema20,ema50,ema200,used,rvol20,roomHighPct,rangePct,trend){
+  let score=0;
 
-const d=new Date(date+"T00:00:00");
+  /* 1. TENDENCIA — 30 */
+  if(priceValue>ema20) score+=10;
+  if(ema20&&ema50&&ema20>ema50) score+=10;
+  if(ema50&&ema200&&ema50>ema200) score+=10;
 
-const day=d.getDay();
+  /* 2. AWR SALUDABLE — 30 */
+  if(used!==null){
+    if(used>=40&&used<=60) score+=30;
+    else if(used>60&&used<=70) score+=28;
+    else if(used>70&&used<=80) score+=22;
+    else if(used>80&&used<=90) score+=12;
+    else if(used>90&&used<=100) score+=3;
+    else if(used<40) score+=20;
+  }
 
-const diff=day===0?-6:1-day;
+  /* 3. RVOL — 20 */
+  if(rvol20!==null){
+    if(rvol20>=1.50) score+=20;
+    else if(rvol20>=1.25) score+=17;
+    else if(rvol20>=1.00) score+=14;
+    else if(rvol20>=0.85) score+=9;
+    else if(rvol20>=0.70) score+=4;
+  }
 
-d.setDate(d.getDate()+diff);
+  /* 4. ESPACIO AL MÁXIMO — 15 */
+  if(roomHighPct!==null){
+    if(roomHighPct>=4&&roomHighPct<=8) score+=15;
+    else if(roomHighPct>=3&&roomHighPct<4) score+=12;
+    else if(roomHighPct>8&&roomHighPct<=15) score+=10;
+    else if(roomHighPct>15) score+=7;
+    else if(roomHighPct>=1&&roomHighPct<3) score+=5;
+    else if(roomHighPct<1) score+=0;
+  }
 
-return d.toISOString().slice(0,10);
+  /* 5. AMPLITUD — 5 */
+  if(rangePct!==null){
+    if(rangePct>=6) score+=5;
+    else if(rangePct>=4) score+=4;
+    else if(rangePct>=2.5) score+=2;
+    else if(rangePct>=1.5) score+=1;
+  }
+
+  /* PENALIZACIÓN DE TENDENCIA */
+  if(trend==="Bajista fuerte") score-=20;
+  else if(trend==="Bajista") score-=10;
+  else if(trend==="Neutral") score-=5;
+
+  /* PROTECCIÓN AWR */
+  if(used>100) score=Math.min(score,35);
+  else if(used>90) score=Math.min(score,55);
+
+  /* PROTECCIÓN RVOL */
+  if(rvol20!==null&&rvol20<0.70) score-=5;
+
+  /* LIMITAR SCORE */
+  score=Math.max(0,Math.min(100,score));
+
+  return Math.round(score);
 }
 
-function buildWeeks(values){
+function trendName(priceValue,e20,e50,e200){
+  if(e20===null||e50===null||e200===null) return "Neutral";
 
-const map={};
-
-values.forEach(v=>{
-
-const k=weekKey(v.datetime);
-
-if(!map[k]){
-map[k]={
-date:k,
-high:-Infinity,
-low:Infinity,
-close:null,
-volume:0
-};
+  if(priceValue>e20&&e20>e50&&e50>e200) return "Alcista fuerte";
+  if(priceValue>e50&&e50>e200) return "Alcista";
+  if(priceValue<e20&&e20<e50&&e50<e200) return "Bajista fuerte";
+  if(priceValue<e50&&e50<e200) return "Bajista";
+  return "Neutral";
 }
 
-const w=map[k];
+function weeklyData(rows){
+  const weeks={};
 
-w.high=Math.max(w.high,num(v.high));
-w.low=Math.min(w.low,num(v.low));
-w.close=num(v.close);
-w.volume+=num(v.volume)||0;
+  rows.forEach(r=>{
+    const d=new Date(r.datetime);
+    if(Number.isNaN(d.getTime())) return;
 
-});
+    const key=isoWeekKey(d);
 
-return Object.values(map)
-.sort((a,b)=>a.date.localeCompare(b.date))
-.map(w=>({
-...w,
-range:w.high-w.low,
-rangePct:w.close?((w.high-w.low)/w.close)*100:null
-}));
+    if(!weeks[key]){
+      weeks[key]={
+        key,
+        high:-Infinity,
+        low:Infinity,
+        volume:0,
+        lastDate:d,
+        close:null
+      };
+    }
 
+    const w=weeks[key];
+
+    if(r.high!==null) w.high=Math.max(w.high,r.high);
+    if(r.low!==null) w.low=Math.min(w.low,r.low);
+    if(r.volume!==null) w.volume+=r.volume;
+
+    if(d>=w.lastDate){
+      w.lastDate=d;
+      w.close=r.close;
+    }
+  });
+
+  return Object.values(weeks)
+    .filter(w=>Number.isFinite(w.high)&&Number.isFinite(w.low))
+    .sort((a,b)=>a.key.localeCompare(b.key))
+    .map(w=>{
+      w.range=w.high-w.low;
+      w.rangePct=w.close?100*w.range/w.close:null;
+      return w;
+    });
 }
 
-function addHistoricalRvol(weeks){
-
-for(let i=0;i<weeks.length;i++){
-
-if(i<20){
-weeks[i].rvol=null;
-continue;
+function percentile(arr,p){
+  if(!arr.length) return null;
+  const a=[...arr].sort((x,y)=>x-y);
+  const pos=(a.length-1)*p;
+  const lo=Math.floor(pos);
+  const hi=Math.ceil(pos);
+  if(lo===hi) return a[lo];
+  return a[lo]+(a[hi]-a[lo])*(pos-lo);
 }
 
-const previous=weeks
-.slice(i-20,i)
-.map(w=>w.volume)
-.filter(v=>v>0);
+function volumeMovement(weeks,current){
+  if(!weeks.length||current.rvol===null) return "—";
 
-const av=avg(previous);
+  const hist=weeks
+    .filter(w=>w.rvol!==null&&w.rangePct!==null)
+    .slice(-20);
 
-weeks[i].rvol=av?weeks[i].volume/av:null;
+  if(hist.length<5) return "—";
 
-}
+  hist.sort((a,b)=>Math.abs(a.rvol-current.rvol)-Math.abs(b.rvol-current.rvol));
 
-return weeks;
-}
+  const sample=hist.slice(0,Math.min(12,hist.length));
+  const ranges=sample.map(w=>w.rangePct).filter(Number.isFinite);
 
-function calculateVolumeMovement(weeks,current,price){
+  if(!ranges.length) return "—";
 
-if(!valid(current.rvol)||!valid(price))
-return null;
+  const p50=percentile(ranges,.5);
+  const p75=percentile(ranges,.75);
 
-const historical=weeks
-.filter(w=>w.date!==current.date&&valid(w.rvol)&&valid(w.rangePct))
-.map(w=>({
-...w,
-distance:Math.abs(w.rvol-current.rvol)
-}))
-.sort((a,b)=>a.distance-b.distance);
-
-let selected=historical.slice(0,12);
-
-if(selected.length<8)
-selected=historical.slice(0,20);
-
-const ranges=selected
-.map(w=>w.rangePct)
-.filter(valid);
-
-if(!ranges.length)
-return null;
-
-const p25=percentile(ranges,.25);
-const p50=percentile(ranges,.50);
-const p75=percentile(ranges,.75);
-
-const move25=price*p25/100;
-const move50=price*p50/100;
-const move75=price*p75/100;
-
-return{
-p25,
-p50,
-p75,
-move25,
-move50,
-move75,
-low25:price-move25,
-high25:price+move25,
-low50:price-move50,
-high50:price+move50,
-low75:price-move75,
-high75:price+move75,
-sample:selected.length
-};
-
-}
-
-function getTrend(price,ema20,ema50,ema200){
-
-if(price>ema20&&ema20>ema50&&ema50>ema200)
-return"Alcista fuerte";
-
-if(price>ema20&&ema20>ema50)
-return"Alcista";
-
-if(price<ema20&&ema20<ema50&&ema50<ema200)
-return"Bajista fuerte";
-
-if(price<ema20&&ema20<ema50)
-return"Bajista";
-
-return"Neutral";
-}
-
-function calculateScore(
-price,
-ema20,
-ema50,
-ema200,
-used,
-rvol20,
-roomHighPct,
-rangePct,
-trend
-){
-
-let score=0;
-
-if(price>ema20){
-score+=10;
-}
-
-if(
-ema20&&
-ema50&&
-ema20>ema50
-){
-score+=10;
-}
-
-if(
-ema50&&
-ema200&&
-ema50>ema200
-){
-score+=10;
-}
-
-if(rvol20!==null){
-
-if(rvol20>=1.50){
-score+=25;
-}
-else if(rvol20>=1.25){
-score+=21;
-}
-else if(rvol20>=1.00){
-score+=17;
-}
-else if(rvol20>=0.85){
-score+=10;
-}
-else if(rvol20>=0.70){
-score+=4;
-}
-
-}
-
-if(used!==null){
-
-if(used>=40&&used<=60){
-score+=30;
-}
-else if(used>60&&used<=75){
-score+=27;
-}
-else if(used>75&&used<=85){
-score+=18;
-}
-else if(used>85&&used<=95){
-score+=8;
-}
-else if(used>95&&used<=100){
-score+=2;
-}
-else if(used>100){
-score-=15;
-}
-
-}
-
-if(rangePct!==null){
-
-if(rangePct>=6){
-score+=5;
-}
-else if(rangePct>=4){
-score+=4;
-}
-else if(rangePct>=2.5){
-score+=2;
-}
-else if(rangePct>=1.5){
-score+=1;
-}
-
-}
-
-if(roomHighPct!==null){
-
-if(roomHighPct>=4&&roomHighPct<=8){
-score+=10;
-}
-else if(roomHighPct>=3&&roomHighPct<4){
-score+=8;
-}
-else if(roomHighPct>8&&roomHighPct<=15){
-score+=7;
-}
-else if(roomHighPct>15){
-score+=5;
-}
-else if(roomHighPct<3){
-score+=2;
-}
-
-}
-
-if(used>100){
-score-=15;
-}
-
-if(used>120){
-score-=15;
-}
-
-if(rvol20!==null&&rvol20<0.70){
-score-=8;
-}
-
-if(trend==="Bajista fuerte"){
-score-=20;
-}
-else if(trend==="Bajista"){
-score-=10;
-}
-else if(trend==="Neutral"){
-score-=3;
-}
-
-if(score<0)
-score=0;
-
-if(score>100)
-score=100;
-
-return Math.round(score);
-}
-
-function getStatus(score){
-
-if(score>=80)
-return{
-status:"MUY BUENA",
-statusClass:"good"
-};
-
-if(score>=65)
-return{
-status:"BUENA",
-statusClass:"good"
-};
-
-if(score>=50)
-return{
-status:"INTERESANTE",
-statusClass:"warn"
-};
-
-return{
-status:"DÉBIL",
-statusClass:"bad"
-};
-
+  return "P50 "+p50.toFixed(1)+"% · P75 "+p75.toFixed(1)+"%";
 }
 
 function processData(symbol,raw){
 
-let values=null;
+  if(raw&&raw.status==="error"){
+    throw new Error(raw.message||"Error del proveedor");
+  }
 
-if(raw&&Array.isArray(raw.values))
-values=raw.values;
+  let values=null;
 
-else if(raw&&Array.isArray(raw.data))
-values=raw.data;
+  if(raw&&Array.isArray(raw.values)) values=raw.values;
+  else if(raw&&raw.data&&Array.isArray(raw.data.values)) values=raw.data.values;
+  else if(raw&&Array.isArray(raw.data)) values=raw.data;
+  else if(Array.isArray(raw)) values=raw;
 
-else if(Array.isArray(raw))
-values=raw;
+  if(!values||!values.length){
+    throw new Error("No se encontraron datos de mercado");
+  }
 
-if(raw&&raw.status==="error")
-throw new Error(
-raw.message||
-raw.code||
-"El proveedor de datos devolvió un error"
-);
+  const rows=values.map(x=>({
+    datetime:String(x.datetime||x.date||""),
+    open:num(x.open),
+    high:num(x.high),
+    low:num(x.low),
+    close:num(x.close),
+    volume:num(x.volume)
+  })).filter(x=>
+    x.datetime&&
+    x.close!==null&&
+    x.high!==null&&
+    x.low!==null
+  ).sort((a,b)=>new Date(a.datetime)-new Date(b.datetime));
 
-if(!Array.isArray(values))
-throw new Error("No se encontraron datos de mercado");
+  if(rows.length<30){
+    throw new Error("Datos insuficientes: "+rows.length+" registros");
+  }
 
-values=values
-.map(v=>({
-datetime:v.datetime,
-open:num(v.open),
-high:num(v.high),
-low:num(v.low),
-close:num(v.close),
-volume:num(v.volume)
-}))
-.filter(v=>
-v.datetime&&
-valid(v.high)&&
-valid(v.low)&&
-valid(v.close)
-)
-.sort((a,b)=>a.datetime.localeCompare(b.datetime));
+  const closes=rows.map(x=>x.close);
+  const e20=ema(closes,20);
+  const e50=ema(closes,50);
+  const e200=ema(closes,200);
 
-if(values.length<30)
-throw new Error("Datos insuficientes para "+symbol);
+  const weeks=weeklyData(rows);
 
-let weeks=buildWeeks(values);
+  if(weeks.length<5){
+    throw new Error("No hay suficientes semanas");
+  }
 
-weeks=addHistoricalRvol(weeks);
+  /* RVOL de cada semana usando las 20 semanas anteriores */
+  for(let i=0;i<weeks.length;i++){
+    const prior=weeks.slice(Math.max(0,i-20),i)
+      .map(w=>w.volume)
+      .filter(v=>Number.isFinite(v)&&v>0);
 
-if(weeks.length<13)
-throw new Error("No hay suficientes semanas para "+symbol);
+    weeks[i].rvol=prior.length
+      ? weeks[i].volume/avg(prior)
+      : null;
+  }
 
-const current=weeks[weeks.length-1];
+  const current=weeks[weeks.length-1];
+  const previous=weeks.slice(0,-1).reverse();
 
-const previous=weeks
-.slice(0,-1)
-.reverse();
+  const awr4=avg(previous.slice(0,4).map(w=>w.range));
+  const awr8=avg(previous.slice(0,8).map(w=>w.range));
+  const awr12=avg(previous.slice(0,12).map(w=>w.range));
 
-const awr4=avg(
-previous
-.slice(0,4)
-.map(w=>w.range)
-);
+  if(awr4===null){
+    throw new Error("No hay suficientes semanas para AWR");
+  }
 
-const awr8=avg(
-previous
-.slice(0,8)
-.map(w=>w.range)
-);
+  const latest=rows[rows.length-1];
+  const currentPrice=latest.close;
 
-const awr12=avg(
-previous
-.slice(0,12)
-.map(w=>w.range)
-);
+  const used=current.range/awr4*100;
+  const remaining=Math.max(0,awr4-current.range);
 
-const price=values[values.length-1].close;
+  const roomHigh=Math.max(0,current.high-currentPrice);
+  const roomHighPct=currentPrice?roomHigh/currentPrice*100:null;
 
-const previous20Volumes=previous
-.slice(0,20)
-.map(w=>w.volume)
-.filter(v=>v>0);
+  const rangePct=currentPrice?current.range/currentPrice*100:null;
 
-const avgVolume20=avg(previous20Volumes);
+  const trend=trendName(currentPrice,e20,e50,e200);
 
-const rvol20=
-avgVolume20?
-current.volume/avgVolume20:
-null;
+  const score=calculateScore(
+    currentPrice,
+    e20,e50,e200,
+    used,
+    current.rvol,
+    roomHighPct,
+    rangePct,
+    trend
+  );
 
-const used=
-awr4?
-(current.range/awr4)*100:
-null;
+  current.rvol=current.rvol;
 
-const remaining=
-awr4?
-Math.max(0,awr4-current.range):
-null;
+  const movement=volumeMovement(weeks,current);
 
-const closes=values.map(v=>v.close);
-
-const ema20=ema(closes,20);
-const ema50=ema(closes,50);
-const ema200=ema(closes,200);
-
-const trend=getTrend(
-price,
-ema20,
-ema50,
-ema200
-);
-
-const roomHigh=
-Math.max(0,current.high-price);
-
-const roomHighPct=
-price?
-(roomHigh/price)*100:
-null;
-
-const rangePct=
-price?
-(current.range/price)*100:
-null;
-
-const score=calculateScore(
-price,
-ema20,
-ema50,
-ema200,
-used,
-rvol20,
-roomHighPct,
-rangePct,
-trend
-);
-
-const status=getStatus(score);
-
-current.rvol=rvol20;
-
-return{
-symbol,
-price,
-currentRange:current.range,
-week1:previous[0]?.range??null,
-week2:previous[1]?.range??null,
-week3:previous[2]?.range??null,
-week4:previous[3]?.range??null,
-awr4,
-awr8,
-awr12,
-used,
-remaining,
-rvol20,
-trend,
-score,
-status:status.status,
-statusClass:status.statusClass,
-roomHighPct,
-rangePct,
-volumeMovement:
-calculateVolumeMovement(
-weeks,
-current,
-price
-)
-};
-
+  return {
+    symbol,
+    price:currentPrice,
+    current,
+    previous,
+    awr4,
+    awr8,
+    awr12,
+    used,
+    remaining,
+    rvol20:current.rvol,
+    trend,
+    score,
+    movement
+  };
 }
 
 async function fetchTicker(symbol){
 
-const url=
-API_URL+
-"?symbol="+
-encodeURIComponent(symbol)+
-"&_="+
-Date.now();
+  const url=API_URL+
+    "?symbol="+encodeURIComponent(symbol)+
+    "&_="+Date.now();
 
-let response;
+  let response;
 
-try{
+  try{
+    response=await fetch(url,{
+      method:"GET",
+      cache:"no-store"
+    });
+  }catch(e){
+    throw new Error("No se pudo conectar con el Worker");
+  }
 
-response=await fetch(
-url,
-{
-method:"GET",
-cache:"no-store"
-}
-);
+  if(!response.ok){
+    throw new Error("Error HTTP "+response.status);
+  }
 
-}
-catch(error){
+  let data;
 
-throw new Error(
-"No se pudo conectar con el Worker"
-);
+  try{
+    data=await response.json();
+  }catch(e){
+    throw new Error("El Worker no devolvió JSON válido");
+  }
 
-}
-
-if(!response.ok){
-
-throw new Error(
-"Error HTTP "+
-response.status
-);
-
+  return processData(symbol,data);
 }
 
-let data;
-
-try{
-
-data=await response.json();
-
-}
-catch(error){
-
-throw new Error(
-"El Worker no devolvió JSON válido"
-);
-
-}
-
-if(
-data&&
-data.status==="error"
-){
-
-throw new Error(
-data.message||
-"Error del proveedor de datos"
-);
-
-}
-
-return processData(
-symbol,
-data
-);
-
+function scoreClass(score){
+  if(score>=75) return "good";
+  if(score>=55) return "warn";
+  return "bad";
 }
 
 function trendClass(t){
-
-if(
-t==="Alcista fuerte"||
-t==="Alcista"
-)
-return"good";
-
-if(
-t==="Bajista fuerte"||
-t==="Bajista"
-)
-return"bad";
-
-return"neutral";
+  if(t.includes("Alcista")) return "good";
+  if(t.includes("Bajista")) return "bad";
+  return "neutral";
 }
 
-function movementHTML(m){
-
-if(!m)
-return'<span class="neutral">Sin muestra</span>';
-
-return`
-<div class="movement-main">
-${m.p25.toFixed(1)}% – ${m.p75.toFixed(1)}%
-</div>
-
-<div>
-Mediana ${m.p50.toFixed(1)}%
-</div>
-
-<div class="movement-small">
-±${money(m.move50)}
-</div>
-
-<div class="movement-small">
-Rango mediana:
-${money(m.low50)} – ${money(m.high50)}
-</div>
-
-<div class="movement-small">
-P25:
-${money(m.low25)} – ${money(m.high25)}
-</div>
-
-<div class="movement-small">
-P75:
-${money(m.low75)} – ${money(m.high75)}
-</div>
-
-<div class="movement-small">
-n=${m.sample} semanas
-</div>
-`;
-
+function statusText(used){
+  if(used<40) return "MUCHO ESPACIO";
+  if(used<=60) return "AWR SALUDABLE";
+  if(used<=80) return "ESPACIO MODERADO";
+  if(used<=90) return "EXTENDIDA";
+  if(used<=100) return "MUY EXTENDIDA";
+  return "SOBRE AWR";
 }
 
-function renderResults(results){
+function statusClass(used){
+  if(used>=40&&used<=70) return "good";
+  if(used>70&&used<=90) return "warn";
+  return "bad";
+}
 
-results.sort(
-(a,b)=>b.score-a.score
-);
+function renderRow(i,d){
 
-const tbody=
-document.getElementById("results");
+  const c=d.current;
+  const p=d.previous;
 
-tbody.innerHTML="";
+  const weeks=[
+    p[0],p[1],p[2],p[3]
+  ].map(w=>w?price(w.range):"—");
 
-results.forEach((r,index)=>{
+  const sc=scoreClass(d.score);
+  const tc=trendClass(d.trend);
+  const uc=statusClass(d.used);
 
-const tr=document.createElement("tr");
-
-if(index===0)
-tr.className="highlight";
-
-tr.innerHTML=`
-
-<td>${index+1}</td>
-
-<td class="ticker">
-${r.symbol}
-</td>
-
-<td>
-${money(r.price)}
-</td>
-
-<td>
-${money(r.currentRange)}
-</td>
-
-<td>
-${money(r.week1)}
-</td>
-
-<td>
-${money(r.week2)}
-</td>
-
-<td>
-${money(r.week3)}
-</td>
-
-<td>
-${money(r.week4)}
-</td>
-
-<td>
-${money(r.awr4)}
-</td>
-
-<td>
-${money(r.awr8)}
-</td>
-
-<td>
-${money(r.awr12)}
-</td>
-
-<td class="${
-r.used>90
-?"bad"
-:r.used>=40
-?"good"
-:"warn"
-}">
-${pct(r.used)}
-</td>
-
-<td>
-${money(r.remaining)}
-</td>
-
-<td class="${
-r.rvol20>=1
-?"good"
-:r.rvol20<.7
-?"bad"
-:"warn"
-}">
-${x(r.rvol20)}
-</td>
-
-<td class="${trendClass(r.trend)}">
-${r.trend}
-</td>
-
-<td class="score">
-${r.score}/100
-</td>
-
-<td class="${r.statusClass}">
-${r.status}
-</td>
-
-<td class="movement">
-${movementHTML(r.volumeMovement)}
-</td>
-
-`;
-
-tbody.appendChild(tr);
-
-});
-
+  return `
+  <tr>
+    <td>${i+1}</td>
+    <td class="ticker">${esc(d.symbol)}</td>
+    <td>${price(d.price)}</td>
+    <td>${price(c.range)} <span class="small">(${pct(c.rangePct)})</span></td>
+    <td>${weeks[0]}</td>
+    <td>${weeks[1]}</td>
+    <td>${weeks[2]}</td>
+    <td>${weeks[3]}</td>
+    <td>${price(d.awr4)}</td>
+    <td>${price(d.awr8)}</td>
+    <td>${price(d.awr12)}</td>
+    <td class="${uc}">${pct(d.used)}</td>
+    <td>${price(d.remaining)}</td>
+    <td>${rvol(d.rvol20)}</td>
+    <td class="${tc}">${esc(d.trend)}</td>
+    <td class="score ${sc}">${d.score}</td>
+    <td class="${uc}">${statusText(d.used)}</td>
+    <td>${esc(d.movement)}</td>
+  </tr>`;
 }
 
 async function analyzeAll(){
 
-const status=
-document.getElementById("status");
+  const input=document.getElementById("tickers");
+  const tbody=document.getElementById("results");
+  const status=document.getElementById("status");
 
-const input=
-document.getElementById("tickers").value;
+  let symbols=input.value
+    .toUpperCase()
+    .split(",")
+    .map(x=>x.trim())
+    .filter(Boolean);
 
-let symbols=[
-...new Set(
-input
-.split(",")
-.map(s=>s.trim().toUpperCase())
-.filter(Boolean)
-)
-];
+  symbols=[...new Set(symbols)].slice(0,MAX_TICKERS);
 
-if(!symbols.length){
+  if(!symbols.length){
+    status.innerHTML='<span class="error">Introduce al menos un ticker.</span>';
+    return;
+  }
 
-status.innerHTML=
-"Escribe al menos un ticker.";
+  tbody.innerHTML="";
+  status.textContent="Analizando "+symbols.length+" símbolos...";
 
-return;
+  let good=0;
+  let failed=0;
+
+  for(let i=0;i<symbols.length;i++){
+
+    const symbol=symbols[i];
+
+    status.textContent=
+      "Analizando "+symbol+
+      " ("+(i+1)+"/"+symbols.length+")...";
+
+    try{
+
+      const data=await fetchTicker(symbol);
+
+      tbody.insertAdjacentHTML(
+        "beforeend",
+        renderRow(good,data)
+      );
+
+      good++;
+
+    }catch(error){
+
+      failed++;
+
+      tbody.insertAdjacentHTML(
+        "beforeend",
+        `<tr>
+          <td>${i+1}</td>
+          <td class="ticker">${esc(symbol)}</td>
+          <td colspan="16" class="error">
+            ${esc(error.message||"Error desconocido")}
+          </td>
+        </tr>`
+      );
+    }
+  }
+
+  status.innerHTML=
+    "Completado: <b>"+good+"</b> correctos · "+
+    "<span class='"+(failed?"bad":"good")+"'>"+
+    failed+" errores</span> · "+
+    "Actualizado: "+new Date().toLocaleTimeString();
 }
 
-if(symbols.length>MAX_TICKERS){
-
-symbols=symbols.slice(0,MAX_TICKERS);
-
-document.getElementById("tickers").value=
-symbols.join(",");
-}
-
-document.getElementById("results").innerHTML=`
-<tr>
-<td colspan="18" style="text-align:center;padding:30px">
-<span class="loading">
-Analizando datos reales...
-</span>
-</td>
-</tr>
-`;
-
-status.innerHTML=
-"Analizando "+
-symbols.length+
-" símbolos...";
-
-const results=[];
-
-for(let i=0;i<symbols.length;i++){
-
-const symbol=symbols[i];
-
-status.innerHTML=
-"Analizando "+
-symbol+
-" ("+
-(i+1)+
-"/"+
-symbols.length+
-")...";
-
-try{
-
-results.push(
-await fetchTicker(symbol)
-);
-
-}
-catch(error){
-
-console.error(symbol,error);
-
-results.push({
-
-symbol,
-price:null,
-currentRange:null,
-week1:null,
-week2:null,
-week3:null,
-week4:null,
-awr4:null,
-awr8:null,
-awr12:null,
-used:null,
-remaining:null,
-rvol20:null,
-trend:"Error",
-score:0,
-status:
-"ERROR: "+
-(error.message||"Error"),
-statusClass:"bad",
-roomHighPct:null,
-rangePct:null,
-volumeMovement:null
-
+window.addEventListener("load",()=>{
+  analyzeAll();
 });
-
-}
-
-}
-
-renderResults(results);
-
-const successful=
-results.filter(
-r=>!r.status.startsWith("ERROR")
-).length;
-
-const failed=
-results.length-successful;
-
-status.innerHTML=
-failed===0
-?
-"Completado: "+
-successful+
-" de "+
-symbols.length+
-" símbolos analizados."
-:
-"Completado: "+
-successful+
-" correctos / "+
-failed+
-" con error.";
-
-}
-
-function loadDefault(){
-
-document.getElementById("tickers").value=
-"NVDA,META,AMZN,GOOGL,UBER,NFLX,QQQM,PLTR";
-
-analyzeAll();
-
-}
-
-window.addEventListener(
-"load",
-()=>{
-analyzeAll();
-}
-);
-
 </script>
+
 </body>
 </html>
 ```
