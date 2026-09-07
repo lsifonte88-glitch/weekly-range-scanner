@@ -6,997 +6,682 @@
 <title>Weekly Range Scanner PRO</title>
 <style>
 *{box-sizing:border-box}
-body{margin:0;background:#070b14;color:#e8edf7;font-family:Arial,Helvetica,sans-serif}
-header{padding:24px 28px 18px;border-bottom:1px solid #20283a;background:#0b101c}
-h1{margin:0;font-size:28px}
-.sub{margin-top:7px;color:#8995aa;font-size:14px}
-.wrap{max-width:1500px;margin:auto;padding:22px}
-.controls{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px}
-input,button{height:42px;border-radius:8px;border:1px solid #303b51;background:#111827;color:#fff;padding:0 13px;font-size:14px}
-input{width:430px}
-button{cursor:pointer;font-weight:bold}
-button:hover{background:#1a2437}
+body{margin:0;background:#080d18;color:#e8eef8;font-family:Arial,sans-serif}
+.wrap{max-width:1450px;margin:auto;padding:24px}
+h1{margin:0 0 6px;font-size:30px}
+.sub{color:#8fa0b8;margin-bottom:22px}
+.panel{background:#101827;border:1px solid #25334a;border-radius:14px;padding:18px;margin-bottom:18px}
+textarea{width:100%;min-height:90px;background:#080d18;color:#fff;border:1px solid #33445e;border-radius:10px;padding:12px;font-size:15px;resize:vertical}
+button{margin-top:12px;background:#2563eb;color:#fff;border:0;border-radius:9px;padding:12px 20px;font-weight:bold;cursor:pointer}
 button:disabled{opacity:.5;cursor:not-allowed}
-.status{margin-bottom:18px;padding:12px 15px;border:1px solid #202b40;border-radius:9px;background:#0c1220;color:#9eabc0;font-size:13px}
-.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
-.card{background:#0d1422;border:1px solid #202b40;border-radius:12px;padding:16px;min-width:0}
-.symbol{font-size:20px;font-weight:bold}
-.price{font-size:27px;font-weight:bold;margin-top:13px}
-.date{font-size:11px;color:#69768b;margin-top:4px}
-.row{display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid #1a2435;font-size:13px}
-.label{color:#8290a6}
-.value{font-weight:bold;text-align:right}
-.good{color:#55d68a}
-.warn{color:#ffd166}
-.bad{color:#ff6b6b}
-.score{margin-top:14px;padding:11px;border-radius:9px;background:#111b2d;display:flex;justify-content:space-between;align-items:center}
-.score strong{font-size:23px}
-.bar{height:6px;background:#202a3c;border-radius:5px;overflow:hidden;margin-top:9px}
-.bar span{display:block;height:100%;background:#5b8cff}
-.projection{margin-top:13px;padding:11px;border-radius:9px;background:#101a2b}
-.projection-title{font-size:11px;color:#8492a9;text-transform:uppercase;margin-bottom:5px}
-.projection-price{font-size:19px;font-weight:bold}
-table{width:100%;border-collapse:collapse;margin-top:25px;background:#0d1422;border:1px solid #202b40}
-th,td{padding:11px 10px;border-bottom:1px solid #1c2638;font-size:12px;text-align:right}
-th{background:#111827;color:#8d9ab0}
-th:first-child,td:first-child{text-align:left}
-tfoot td{font-weight:bold;background:#101827}
-.empty{padding:40px;text-align:center;color:#7f8ba0;border:1px dashed #28344a;border-radius:10px}
-.small{font-size:11px;color:#68758a;line-height:1.5;margin-top:18px}
-.errorbox{padding:16px;border:1px solid #6b2424;background:#241016;color:#ff8b8b;border-radius:10px;white-space:pre-wrap;word-break:break-word}
-@media(max-width:1100px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:700px){
-.grid{grid-template-columns:1fr}
+.status{margin-top:12px;color:#9fb0c8}
+.error{background:#35151a;border:1px solid #7f2935;color:#ffb5bd;padding:12px;border-radius:10px;margin-top:12px;display:none}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(330px,1fr));gap:16px}
+.card{background:#101827;border:1px solid #26364e;border-radius:14px;padding:18px;position:relative}
+.rank{position:absolute;right:16px;top:14px;background:#1c2940;border-radius:20px;padding:5px 10px;color:#9fb2cc;font-size:12px}
+.symbol{font-size:23px;font-weight:bold}
+.price{font-size:27px;margin-top:8px}
+.date{font-size:12px;color:#8191a8;margin-bottom:14px}
+.signal{display:inline-block;padding:7px 11px;border-radius:8px;font-weight:bold;font-size:12px;margin-bottom:15px;background:#1d2940}
+.signal.strong{background:#14532d;color:#bbf7d0}
+.signal.buy{background:#164e63;color:#a5f3fc}
+.signal.watch{background:#713f12;color:#fde68a}
+.signal.neutral{background:#263244;color:#cbd5e1}
+.signal.avoid{background:#4c1d1d;color:#fecaca}
+.score{font-size:18px;font-weight:bold;margin-bottom:14px}
+.row{display:flex;justify-content:space-between;border-bottom:1px solid #1d293b;padding:8px 0;gap:15px}
+.row span:first-child{color:#8fa0b8}
+.row span:last-child{text-align:right;font-weight:bold}
+.good{color:#5ee6a8}
+.bad{color:#ff8585}
+.neutralc{color:#ffd166}
+.proj{margin-top:15px;padding:12px;background:#0b1220;border-radius:10px}
+.projtitle{color:#8fa0b8;font-size:12px;margin-bottom:7px}
+.projrange{font-size:18px;font-weight:bold}
+.small{font-size:12px;color:#8291a7;margin-top:5px}
+table{width:100%;border-collapse:collapse;min-width:900px}
+th,td{padding:10px;border-bottom:1px solid #25334a;text-align:left}
+th{color:#8fa0b8;font-size:12px}
+.tablewrap{overflow:auto}
+.legend{font-size:12px;color:#8090a6;margin-top:12px}
+@media(max-width:600px){
 .wrap{padding:12px}
-header{padding:18px}
-input{width:100%}
+h1{font-size:24px}
+.grid{grid-template-columns:1fr}
 }
 </style>
 </head>
 
 <body>
-
-<header>
-<h1>Weekly Range Scanner PRO</h1>
-<div class="sub">
-US Stocks & ETFs · Weekly Range · AWR · RVOL · EMA · Trend · Swing Score · Volume Projection
-</div>
-</header>
-
 <div class="wrap">
 
-<div class="controls">
+<h1>Weekly Range Scanner PRO</h1>
+<div class="sub">Scanner de rango semanal, volumen, tendencia y oportunidades Swing</div>
 
-<input
-id="symbols"
-value="NVDA,META,AMZN,GOOGL,UBER,NFLX,QQQM,PLTR"
-placeholder="NVDA,META,AMZN">
-
-<button id="scanBtn" onclick="scan()">ANALIZAR</button>
-
-<button onclick="loadDefault()">DEFAULT</button>
-
+<div class="panel">
+<textarea id="symbols">NVDA,META,AMZN,GOOGL,UBER,NFLX,QQQM,PLTR</textarea>
+<button id="btn" onclick="analyze()">ANALIZAR</button>
+<div id="status" class="status">Máximo 8 símbolos por análisis. MSFT se excluye automáticamente.</div>
+<div id="error" class="error"></div>
 </div>
 
-<div id="status" class="status">
-Listo para analizar.
-</div>
-
-<div id="cards" class="grid">
-<div class="empty">Pulsa ANALIZAR para comenzar.</div>
-</div>
-
-<table id="table" style="display:none">
-<thead>
-<tr>
-<th>SYMBOL</th>
-<th>PRICE</th>
-<th>WEEK RANGE</th>
-<th>AWR 4W</th>
-<th>AWR 8W</th>
-<th>AWR 12W</th>
-<th>RVOL 20D</th>
-<th>EMA20</th>
-<th>EMA50</th>
-<th>EMA200</th>
-<th>TREND</th>
-<th>SCORE</th>
-<th>PROJECTED</th>
-</tr>
-</thead>
-<tbody id="tbody"></tbody>
-</table>
-
-<div class="small">
-Datos reales de Twelve Data mediante Cloudflare Worker.
-Máximo 8 símbolos por análisis.
-MSFT está excluido.
-</div>
+<div id="results"></div>
 
 </div>
 
 <script>
+const API="https://weekly-range-api.changowalu.workers.dev";
 
-const API="https://weekly-range-api.changowalu.workers.dev/api";
+const $=id=>document.getElementById(id);
 
-const DEFAULT_SYMBOLS=[
-"NVDA","META","AMZN","GOOGL",
-"UBER","NFLX","QQQM","PLTR"
-];
-
-function loadDefault(){
-document.getElementById("symbols").value=DEFAULT_SYMBOLS.join(",");
+function num(v){
+  if(v===null||v===undefined)return NaN;
+  if(typeof v==="number")return v;
+  let s=String(v).trim().replace(/,/g,"");
+  s=s.replace(/\s+/g,"");
+  return Number(s);
 }
 
-function number(v){
-if(v===null||v===undefined)return null;
-if(typeof v==="number")return Number.isFinite(v)?v:null;
-
-let s=String(v).trim().replace(/,/g,"");
-
-if(!s)return null;
-
-let n=Number(s);
-
-return Number.isFinite(n)?n:null;
+function field(o,names){
+  for(const n of names){
+    if(o[n]!==undefined)return o[n];
+  }
+  const keys=Object.keys(o);
+  for(const n of names){
+    const k=keys.find(x=>x.toLowerCase()===n.toLowerCase());
+    if(k!==undefined)return o[k];
+  }
+  return undefined;
 }
 
-function getField(o,names){
+function normalizeValues(values){
+  if(!Array.isArray(values))return[];
 
-if(!o||typeof o!=="object")return null;
+  const out=values.map(x=>{
+    const d=field(x,["datetime","date","fecha y hora","fecha_hora"]);
+    const open=num(field(x,["open","apertura"]));
+    const high=num(field(x,["high","máximo","maximo"]));
+    const low=num(field(x,["low","mínimo","minimo","bajo"]));
+    const close=num(field(x,["close","cierre"]));
+    const volume=num(field(x,["volume","volumen"]));
 
-for(const name of names){
+    return {
+      date:String(d||""),
+      open,high,low,close,volume
+    };
+  }).filter(x=>
+    x.date &&
+    Number.isFinite(x.open) &&
+    Number.isFinite(x.high) &&
+    Number.isFinite(x.low) &&
+    Number.isFinite(x.close)
+  );
 
-if(o[name]!==undefined){
-return o[name];
+  out.sort((a,b)=>new Date(a.date)-new Date(b.date));
+
+  const unique=[];
+  const seen=new Set();
+
+  for(const x of out){
+    if(!seen.has(x.date)){
+      seen.add(x.date);
+      unique.push(x);
+    }
+  }
+
+  return unique;
 }
 
+function ema(values,len){
+  if(values.length<len)return NaN;
+
+  const k=2/(len+1);
+  let e=values.slice(0,len).reduce((a,b)=>a+b,0)/len;
+
+  for(let i=len;i<values.length;i++){
+    e=values[i]*k+e*(1-k);
+  }
+  return e;
 }
 
-return null;
+function avg(a){
+  const v=a.filter(Number.isFinite);
+  return v.length?v.reduce((x,y)=>x+y,0)/v.length:NaN;
 }
 
-function normalizeBar(x){
-
-if(!x||typeof x!=="object")return null;
-
-const datetime=getField(x,[
-"datetime",
-"date",
-"fecha y hora",
-"fecha_hora"
-]);
-
-const open=number(getField(x,[
-"open",
-"apertura"
-]));
-
-const high=number(getField(x,[
-"high",
-"máximo",
-"maximo"
-]));
-
-const low=number(getField(x,[
-"low",
-"mínimo",
-"bajo"
-]));
-
-const close=number(getField(x,[
-"close",
-"cierre"
-]));
-
-const volume=number(getField(x,[
-"volume",
-"volumen"
-]));
-
-if(!datetime||high===null||low===null||close===null){
-return null;
+function std(a){
+  const v=a.filter(Number.isFinite);
+  if(v.length<2)return NaN;
+  const m=avg(v);
+  return Math.sqrt(v.reduce((s,x)=>s+(x-m)**2,0)/(v.length-1));
 }
 
-return{
-datetime:String(datetime).trim(),
-open,
-high,
-low,
-close,
-volume
-};
-
+function pct(a,b){
+  return b?((a/b)-1)*100:NaN;
 }
 
-function normalizeValues(raw){
-
-if(!raw)return[];
-
-let values=raw.values||raw.valores||[];
-
-if(!Array.isArray(values))return[];
-
-return values
-.map(normalizeBar)
-.filter(Boolean)
-.sort((a,b)=>{
-
-const da=new Date(a.datetime);
-const db=new Date(b.datetime);
-
-return da-db;
-
-});
-
+function money(x){
+  return Number.isFinite(x)
+    ? "$"+x.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})
+    : "N/D";
 }
 
-function avg(arr){
-
-const a=arr.filter(Number.isFinite);
-
-if(!a.length)return null;
-
-return a.reduce((s,v)=>s+v,0)/a.length;
-
+function percent(x){
+  return Number.isFinite(x)
+    ? x.toFixed(2)+"%"
+    : "N/D";
 }
 
-function ema(values,length){
-
-if(values.length<length)return null;
-
-const first=avg(values.slice(0,length));
-
-if(first===null)return null;
-
-const alpha=2/(length+1);
-
-let e=first;
-
-for(let i=length;i<values.length;i++){
-e=values[i]*alpha+e*(1-alpha);
+function xfmt(x){
+  return Number.isFinite(x)?x.toFixed(2)+"x":"N/D";
 }
 
-return e;
-
+function getWeekKey(date){
+  const d=new Date(date+"T12:00:00");
+  const day=d.getDay();
+  const diff=day===0?-6:1-day;
+  d.setDate(d.getDate()+diff);
+  return d.toISOString().slice(0,10);
 }
 
-function getWeeks(values){
+function weeklyData(data){
+  const map={};
 
-const map={};
+  for(const d of data){
+    const key=getWeekKey(d.date);
 
-for(const v of values){
+    if(!map[key]){
+      map[key]={
+        week:key,
+        high:d.high,
+        low:d.low,
+        close:d.close
+      };
+    }else{
+      map[key].high=Math.max(map[key].high,d.high);
+      map[key].low=Math.min(map[key].low,d.low);
+      map[key].close=d.close;
+    }
+  }
 
-const d=new Date(v.datetime+"T12:00:00");
-
-if(Number.isNaN(d.getTime()))continue;
-
-const day=d.getDay();
-
-const diff=day===0?-6:1-day;
-
-const monday=new Date(d);
-
-monday.setDate(d.getDate()+diff);
-
-const key=
-monday.getFullYear()+"-"+
-String(monday.getMonth()+1).padStart(2,"0")+"-"+
-String(monday.getDate()).padStart(2,"0");
-
-if(!map[key]){
-
-map[key]={
-high:-Infinity,
-low:Infinity,
-last:null
-};
-
+  return Object.values(map).sort((a,b)=>a.week.localeCompare(b.week));
 }
 
-map[key].high=Math.max(map[key].high,v.high);
-map[key].low=Math.min(map[key].low,v.low);
+function currentWeek(data){
+  if(!data.length)return null;
+  const key=getWeekKey(data[data.length-1].date);
+  const rows=data.filter(x=>getWeekKey(x.date)===key);
 
-if(
-!map[key].last||
-new Date(v.datetime)>new Date(map[key].last.datetime)
-){
-map[key].last=v;
-}
+  if(!rows.length)return null;
 
-}
-
-return Object.keys(map)
-.sort()
-.map(k=>({
-key:k,
-high:map[k].high,
-low:map[k].low,
-range:map[k].high-map[k].low,
-last:map[k].last
-}));
-
+  return{
+    week:key,
+    high:Math.max(...rows.map(x=>x.high)),
+    low:Math.min(...rows.map(x=>x.low)),
+    close:rows[rows.length-1].close
+  };
 }
 
 function calcAWR(weeks,n){
+  if(weeks.length<n+1)return NaN;
 
-const completed=weeks.slice(0,-1);
+  const completed=weeks.slice(0,-1);
+  const selected=completed.slice(-n);
 
-if(completed.length<n)return null;
-
-return avg(
-completed
-.slice(-n)
-.map(w=>w.range)
-);
-
+  return avg(selected.map(x=>x.high-x.low));
 }
 
-function calcRVOL(values){
+function rvol20(data){
+  if(data.length<21)return NaN;
 
-if(values.length<21)return null;
+  const current=data[data.length-1].volume;
+  const previous=data.slice(-21,-1).map(x=>x.volume).filter(Number.isFinite);
 
-const latest=values[values.length-1];
+  if(!Number.isFinite(current)||!previous.length)return NaN;
 
-if(latest.volume===null)return null;
-
-const previous=values
-.slice(-21,-1)
-.map(x=>x.volume)
-.filter(Number.isFinite);
-
-const average=avg(previous);
-
-if(!average)return null;
-
-return latest.volume/average;
-
+  return current/avg(previous);
 }
 
-function getCurrentWeek(weeks){
+function volumeTrend(data){
+  if(data.length<11)return 0;
 
-if(!weeks.length)return null;
+  const recent=avg(data.slice(-5).map(x=>x.volume));
+  const old=avg(data.slice(-10,-5).map(x=>x.volume));
 
-const w=weeks[weeks.length-1];
+  if(!Number.isFinite(recent)||!Number.isFinite(old)||!old)return 0;
 
-return{
-range:w.range,
-high:w.high,
-low:w.low,
-start:w.key
-};
-
+  return ((recent/old)-1)*100;
 }
 
-function trend(price,e20,e50,e200){
+function priceMomentum(data){
+  if(data.length<21)return NaN;
 
-if(
-price>e20 &&
-e20>e50 &&
-e50>e200
-)return"BULLISH";
+  const now=data[data.length-1].close;
+  const old=data[data.length-21].close;
 
-if(
-price<e20 &&
-e20<e50 &&
-e50<e200
-)return"BEARISH";
-
-return"NEUTRAL";
-
+  return pct(now,old);
 }
 
-function scoreData(
-price,
-e20,
-e50,
-e200,
-rvol,
-current,
-awr4,
-awr8,
-awr12
-){
-
-let score=0;
-
-if(price>e20)score+=15;
-
-if(e20>e50)score+=15;
-
-if(e50>e200)score+=15;
-
-if(rvol!==null){
-
-if(rvol>=1.5)score+=15;
-else if(rvol>=1.15)score+=10;
-else if(rvol>=1)score+=5;
-
+function rangePosition(w){
+  if(!w)return NaN;
+  const range=w.high-w.low;
+  if(!range)return 50;
+  return ((w.close-w.low)/range)*100;
 }
 
-if(current&&awr4){
+function scoreEngine(d){
+  let trend=0;
+  let momentum=0;
+  let volume=0;
+  let range=0;
+  let structure=0;
 
-const u=current.range/awr4;
+  const{
+    price,e20,e50,e200,
+    rvol,momentumPct,
+    currentRange,awr4,awr8,awr12,
+    position,volTrend
+  }=d;
 
-if(u<0.60)score+=15;
-else if(u<0.85)score+=10;
-else if(u<1.10)score+=5;
+  if(price>e20)trend+=10;
+  if(e20>e50)trend+=10;
+  if(e50>e200)trend+=10;
 
+  if(momentumPct>8)momentum=20;
+  else if(momentumPct>4)momentum=16;
+  else if(momentumPct>1)momentum=11;
+  else if(momentumPct>-2)momentum=6;
+  else momentum=2;
+
+  if(rvol>=1.5)volume+=15;
+  else if(rvol>=1.2)volume+=12;
+  else if(rvol>=1.0)volume+=9;
+  else if(rvol>=0.85)volume+=5;
+
+  if(volTrend>15)volume+=5;
+  else if(volTrend>5)volume+=3;
+
+  if(Number.isFinite(awr4)&&awr4>0){
+    const ratio=currentRange/awr4;
+
+    if(ratio>=0.8&&ratio<=1.4)range+=8;
+    else if(ratio<0.8)range+=5;
+    else range+=2;
+  }
+
+  if(Number.isFinite(awr4)&&Number.isFinite(awr8)&&Number.isFinite(awr12)){
+    if(awr4>awr8&&awr8>awr12)range+=7;
+    else if(awr4>=awr12)range+=4;
+  }
+
+  if(position>=55&&position<=90)structure+=8;
+  else if(position>90)structure+=4;
+  else if(position>=40)structure+=5;
+
+  if(price>e50)structure+=4;
+  if(price>e200)structure+=3;
+
+  let total=trend+momentum+volume+range+structure;
+
+  total=Math.max(0,Math.min(100,Math.round(total)));
+
+  return{
+    score:total,
+    trend,
+    momentum,
+    volume,
+    range,
+    structure
+  };
 }
 
-if(awr4&&awr8&&awr12){
-
-if(awr4>awr8&&awr8>awr12){
-score+=15;
-}else if(awr4>=awr12){
-score+=8;
+function signal(score,d){
+  if(score>=80)return["STRONG BUY","strong"];
+  if(score>=65)return["BUY","buy"];
+  if(score>=50)return["WATCH","watch"];
+  if(score>=35)return["NEUTRAL","neutral"];
+  return["AVOID","avoid"];
 }
 
+function trendText(price,e20,e50,e200){
+  if(price>e20&&e20>e50&&e50>e200)return["BULLISH","good"];
+  if(price<e20&&e20<e50&&e50<e200)return["BEARISH","bad"];
+  return["NEUTRAL","neutralc"];
 }
 
-return Math.max(0,Math.min(100,score));
+function makeAnalysis(symbol,raw){
+  let values=raw?.values||raw?.data||raw?.datos;
 
+  if(!Array.isArray(values)){
+    if(Array.isArray(raw))values=raw;
+    else return null;
+  }
+
+  const data=normalizeValues(values);
+
+  if(data.length<200)return null;
+
+  const closes=data.map(x=>x.close);
+
+  const last=data[data.length-1];
+
+  const price=last.close;
+
+  const e20=ema(closes,20);
+  const e50=ema(closes,50);
+  const e200=ema(closes,200);
+
+  const weeks=weeklyData(data);
+  const cw=currentWeek(data);
+
+  const currentRange=cw?cw.high-cw.low:NaN;
+  const currentRangePct=cw?pct(cw.high,cw.low):NaN;
+
+  const awr4=calcAWR(weeks,4);
+  const awr8=calcAWR(weeks,8);
+  const awr12=calcAWR(weeks,12);
+
+  const rvol=rvol20(data);
+  const volTrend=volumeTrend(data);
+  const momentumPct=priceMomentum(data);
+  const position=rangePosition(cw);
+
+  const trend=trendText(price,e20,e50,e200);
+
+  const base=avg([awr4,awr8,awr12].filter(Number.isFinite));
+
+  let projected=base;
+
+  if(Number.isFinite(projected)&&Number.isFinite(rvol)){
+    projected*=Math.max(.75,Math.min(1.75,Math.sqrt(rvol)));
+  }
+
+  if(!Number.isFinite(projected))projected=NaN;
+
+  const deviation=Number.isFinite(projected)?projected/2:NaN;
+
+  const bullTarget=Number.isFinite(deviation)?price+deviation:NaN;
+  const bearTarget=Number.isFinite(deviation)?price-deviation:NaN;
+
+  const scoreData=scoreEngine({
+    price,e20,e50,e200,rvol,momentumPct,
+    currentRange,awr4,awr8,awr12,
+    position,volTrend
+  });
+
+  const sig=signal(scoreData.score,{
+    trend:trend[0]
+  });
+
+  return{
+    symbol,
+    price,
+    date:last.date,
+    currentRange,
+    currentRangePct,
+    awr4,awr8,awr12,
+    rvol,
+    e20,e50,e200,
+    trend,
+    momentumPct,
+    volTrend,
+    position,
+    projected,
+    bullTarget,
+    bearTarget,
+    ...scoreData,
+    signal:sig[0],
+    signalClass:sig[1]
+  };
 }
 
-function projectedMove(
-price,
-rvol,
-awr4,
-awr8,
-awr12
-){
+async function fetchData(symbols){
+  const url=API+"/api?symbols="+encodeURIComponent(symbols.join(","));
 
-if(
-price===null||
-awr4===null
-)return null;
+  const response=await fetch(url,{cache:"no-store"});
 
-let base=awr4;
+  const text=await response.text();
 
-if(awr8!==null){
-base=(base+awr8)/2;
+  let json;
+
+  try{
+    json=JSON.parse(text);
+  }catch{
+    throw new Error("El Worker devolvió una respuesta que no es JSON.");
+  }
+
+  if(!response.ok||json.status==="error"){
+    throw new Error(json.message||"Error del Worker.");
+  }
+
+  return json;
 }
 
-if(awr12!==null){
-base=(base+awr12)/2;
+function card(d,index){
+  return`
+  <div class="card">
+    <div class="rank">#${index+1}</div>
+
+    <div class="symbol">${d.symbol}</div>
+    <div class="price">${money(d.price)}</div>
+    <div class="date">Precio de ${d.date}</div>
+
+    <div class="signal ${d.signalClass}">${d.signal}</div>
+
+    <div class="score">SWING SCORE: ${d.score}/100</div>
+
+    <div class="row">
+      <span>Tendencia</span>
+      <span class="${d.trend[1]}">${d.trend[0]}</span>
+    </div>
+
+    <div class="row">
+      <span>Momentum 20D</span>
+      <span>${percent(d.momentumPct)}</span>
+    </div>
+
+    <div class="row">
+      <span>RVOL 20D</span>
+      <span>${xfmt(d.rvol)}</span>
+    </div>
+
+    <div class="row">
+      <span>Volumen reciente</span>
+      <span>${percent(d.volTrend)}</span>
+    </div>
+
+    <div class="row">
+      <span>Rango semanal</span>
+      <span>${money(d.currentRange)}</span>
+    </div>
+
+    <div class="row">
+      <span>% rango semanal</span>
+      <span>${percent(d.currentRangePct)}</span>
+    </div>
+
+    <div class="row">
+      <span>Posición en rango</span>
+      <span>${percent(d.position)}</span>
+    </div>
+
+    <div class="row">
+      <span>AWR 4S</span>
+      <span>${money(d.awr4)}</span>
+    </div>
+
+    <div class="row">
+      <span>AWR 8S</span>
+      <span>${money(d.awr8)}</span>
+    </div>
+
+    <div class="row">
+      <span>AWR 12S</span>
+      <span>${money(d.awr12)}</span>
+    </div>
+
+    <div class="row">
+      <span>EMA 20</span>
+      <span>${money(d.e20)}</span>
+    </div>
+
+    <div class="row">
+      <span>EMA 50</span>
+      <span>${money(d.e50)}</span>
+    </div>
+
+    <div class="row">
+      <span>EMA 200</span>
+      <span>${money(d.e200)}</span>
+    </div>
+
+    <div class="proj">
+      <div class="projtitle">MOVIMIENTO PROYECTADO</div>
+      <div class="projrange">
+        ${money(d.bearTarget)} → ${money(d.bullTarget)}
+      </div>
+      <div class="small">
+        Movimiento estimado: ${money(d.projected)}
+        · ±${Number.isFinite(d.projected)?((d.projected/d.price)*100/2).toFixed(2):"N/D"}%
+      </div>
+    </div>
+  </div>`;
 }
 
-let volumeFactor=1;
+function table(rows){
+  return`
+  <div class="panel">
+    <h2>Ranking de oportunidades</h2>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>SÍMBOLO</th>
+            <th>SCORE</th>
+            <th>SEÑAL</th>
+            <th>PRECIO</th>
+            <th>TENDENCIA</th>
+            <th>RVOL</th>
+            <th>MOMENTUM</th>
+            <th>RANGO</th>
+            <th>PROYECCIÓN</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((d,i)=>`
+          <tr>
+            <td>${i+1}</td>
+            <td><b>${d.symbol}</b></td>
+            <td><b>${d.score}</b></td>
+            <td>${d.signal}</td>
+            <td>${money(d.price)}</td>
+            <td>${d.trend[0]}</td>
+            <td>${xfmt(d.rvol)}</td>
+            <td>${percent(d.momentumPct)}</td>
+            <td>${percent(d.currentRangePct)}</td>
+            <td>${money(d.bearTarget)} → ${money(d.bullTarget)}</td>
+          </tr>`).join("")}
+        </tbody>
+      </table>
+    </div>
 
-if(rvol!==null){
-
-volumeFactor=Math.max(
-0.75,
-Math.min(1.75,Math.sqrt(rvol))
-);
-
+    <div class="legend">
+      SCORE ≥80 = STRONG BUY · ≥65 = BUY · ≥50 = WATCH ·
+      ≥35 = NEUTRAL · &lt;35 = AVOID
+    </div>
+  </div>`;
 }
 
-const range=base*volumeFactor;
+async function analyze(){
 
-return{
-up:price+range,
-down:price-range,
-range
-};
+  const btn=$("btn");
+  const status=$("status");
+  const error=$("error");
+  const results=$("results");
 
+  error.style.display="none";
+  error.textContent="";
+  results.innerHTML="";
+
+  let symbols=$("symbols").value
+    .split(/[\s,;]+/)
+    .map(x=>x.trim().toUpperCase())
+    .filter(Boolean)
+    .filter(x=>x!=="MSFT");
+
+  symbols=[...new Set(symbols)].slice(0,8);
+
+  if(!symbols.length){
+    error.textContent="Introduce al menos un símbolo.";
+    error.style.display="block";
+    return;
+  }
+
+  btn.disabled=true;
+  btn.textContent="ANALIZANDO...";
+  status.textContent="Descargando datos reales y calculando indicadores...";
+
+  try{
+
+    const response=await fetchData(symbols);
+
+    const source=response.data||response;
+
+    const rows=[];
+
+    for(const symbol of symbols){
+
+      let raw=source[symbol];
+
+      if(!raw){
+        const key=Object.keys(source).find(
+          x=>x.toUpperCase()===symbol
+        );
+        if(key)raw=source[key];
+      }
+
+      if(!raw)continue;
+
+      const result=makeAnalysis(symbol,raw);
+
+      if(result)rows.push(result);
+    }
+
+    rows.sort((a,b)=>b.score-a.score);
+
+    if(!rows.length){
+      throw new Error(
+        "No se pudieron calcular los indicadores. Los datos recibidos no contienen suficientes barras válidas."
+      );
+    }
+
+    results.innerHTML=
+      table(rows)+
+      `<div class="grid">${rows.map(card).join("")}</div>`;
+
+    const used=response.creditsUsed??"N/D";
+    const left=response.creditsLeft??"N/D";
+
+    status.textContent=
+      `Análisis terminado: ${rows.length}/${symbols.length} símbolos procesados. `+
+      `· Actualizado: ${new Date().toLocaleString()} `+
+      `· Créditos usados: ${used} · Créditos restantes: ${left}`;
+
+  }catch(e){
+
+    error.textContent=e.message||String(e);
+    error.style.display="block";
+
+    status.textContent="No se pudo completar el análisis.";
+
+  }finally{
+
+    btn.disabled=false;
+    btn.textContent="ANALIZAR";
+
+  }
 }
-
-function analyze(symbol,raw){
-
-const values=normalizeValues(raw);
-
-if(values.length<200){
-
-return{
-symbol,
-error:
-"Datos insuficientes para EMA200. Recibidos: "+
-values.length
-};
-
-}
-
-const closes=values.map(x=>x.close);
-
-const e20=ema(closes,20);
-const e50=ema(closes,50);
-const e200=ema(closes,200);
-
-const latest=values[values.length-1];
-
-const weeks=getWeeks(values);
-
-const current=getCurrentWeek(weeks);
-
-const awr4=calcAWR(weeks,4);
-const awr8=calcAWR(weeks,8);
-const awr12=calcAWR(weeks,12);
-
-const rvol=calcRVOL(values);
-
-const tr=trend(
-latest.close,
-e20,
-e50,
-e200
-);
-
-const score=scoreData(
-latest.close,
-e20,
-e50,
-e200,
-rvol,
-current,
-awr4,
-awr8,
-awr12
-);
-
-const projected=projectedMove(
-latest.close,
-rvol,
-awr4,
-awr8,
-awr12
-);
-
-const rangePct=
-current&&latest.close
-?current.range/latest.close*100
-:null;
-
-return{
-symbol,
-price:latest.close,
-date:latest.datetime,
-currentRange:current?current.range:null,
-currentRangePct:rangePct,
-weekHigh:current?current.high:null,
-weekLow:current?current.low:null,
-awr4,
-awr8,
-awr12,
-rvol,
-ema20:e20,
-ema50:e50,
-ema200:e200,
-trend:tr,
-score,
-projected
-};
-
-}
-
-function money(v){
-
-return Number.isFinite(v)
-?"$"+v.toFixed(2)
-:"—";
-
-}
-
-function pct(v){
-
-return Number.isFinite(v)
-?v.toFixed(2)+"%"
-:"—";
-
-}
-
-function trendClass(t){
-
-if(t==="BULLISH")return"good";
-if(t==="BEARISH")return"bad";
-return"warn";
-
-}
-
-function scoreClass(s){
-
-if(s>=75)return"good";
-if(s>=55)return"warn";
-return"bad";
-
-}
-
-function cardHTML(x){
-
-if(x.error){
-
-return`
-<div class="card">
-<div class="symbol">${x.symbol}</div>
-<div class="errorbox">${x.error}</div>
-</div>
-`;
-
-}
-
-return`
-<div class="card">
-
-<div class="symbol">${x.symbol}</div>
-
-<div class="price">${money(x.price)}</div>
-
-<div class="date">
-Precio correspondiente a: ${x.date}
-</div>
-
-<div class="row">
-<span class="label">Rango semana</span>
-<span class="value">${money(x.currentRange)}</span>
-</div>
-
-<div class="row">
-<span class="label">% rango semanal</span>
-<span class="value">${pct(x.currentRangePct)}</span>
-</div>
-
-<div class="row">
-<span class="label">AWR 4 semanas</span>
-<span class="value">${money(x.awr4)}</span>
-</div>
-
-<div class="row">
-<span class="label">AWR 8 semanas</span>
-<span class="value">${money(x.awr8)}</span>
-</div>
-
-<div class="row">
-<span class="label">AWR 12 semanas</span>
-<span class="value">${money(x.awr12)}</span>
-</div>
-
-<div class="row">
-<span class="label">RVOL 20D</span>
-<span class="value">
-${x.rvol!==null?x.rvol.toFixed(2)+"x":"—"}
-</span>
-</div>
-
-<div class="row">
-<span class="label">EMA 20</span>
-<span class="value">${money(x.ema20)}</span>
-</div>
-
-<div class="row">
-<span class="label">EMA 50</span>
-<span class="value">${money(x.ema50)}</span>
-</div>
-
-<div class="row">
-<span class="label">EMA 200</span>
-<span class="value">${money(x.ema200)}</span>
-</div>
-
-<div class="row">
-<span class="label">Tendencia</span>
-<span class="value ${trendClass(x.trend)}">
-${x.trend}
-</span>
-</div>
-
-<div class="score">
-
-<div style="flex:1">
-
-<div class="label">SWING SCORE</div>
-
-<div class="bar">
-<span style="width:${x.score}%"></span>
-</div>
-
-</div>
-
-<strong class="${scoreClass(x.score)}">
-${x.score}
-</strong>
-
-</div>
-
-${
-x.projected
-?
-`
-<div class="projection">
-
-<div class="projection-title">
-Movimiento estadístico proyectado
-</div>
-
-<div class="projection-price">
-${money(x.projected.down)}
-→
-${money(x.projected.up)}
-</div>
-
-<div class="date">
-Rango proyectado: ${money(x.projected.range)}
-</div>
-
-</div>
-`
-:""
-
-}
-
-</div>
-`;
-
-}
-
-function tableHTML(x){
-
-if(x.error){
-
-return`
-<tr>
-<td>${x.symbol}</td>
-<td colspan="12" class="bad">${x.error}</td>
-</tr>
-`;
-
-}
-
-return`
-<tr>
-
-<td><strong>${x.symbol}</strong></td>
-
-<td>${money(x.price)}</td>
-
-<td>${pct(x.currentRangePct)}</td>
-
-<td>${money(x.awr4)}</td>
-
-<td>${money(x.awr8)}</td>
-
-<td>${money(x.awr12)}</td>
-
-<td>${x.rvol!==null?x.rvol.toFixed(2)+"x":"—"}</td>
-
-<td>${money(x.ema20)}</td>
-
-<td>${money(x.ema50)}</td>
-
-<td>${money(x.ema200)}</td>
-
-<td class="${trendClass(x.trend)}">${x.trend}</td>
-
-<td class="${scoreClass(x.score)}">${x.score}</td>
-
-<td>${x.projected?money(x.projected.up):"—"}</td>
-
-</tr>
-`;
-
-}
-
-async function scan(){
-
-const input=document.getElementById("symbols");
-const button=document.getElementById("scanBtn");
-const status=document.getElementById("status");
-const cards=document.getElementById("cards");
-const table=document.getElementById("table");
-const tbody=document.getElementById("tbody");
-
-let symbols=input.value
-.split(",")
-.map(x=>x.trim().toUpperCase())
-.filter(Boolean);
-
-symbols=[...new Set(symbols)]
-.filter(x=>x!=="MSFT");
-
-if(!symbols.length){
-
-status.textContent="Introduce al menos un símbolo.";
-
-return;
-
-}
-
-if(symbols.length>8){
-
-symbols=symbols.slice(0,8);
-
-input.value=symbols.join(",");
-
-}
-
-button.disabled=true;
-button.textContent="ANALIZANDO...";
-
-status.textContent=
-"Conectando con Twelve Data...";
-
-cards.innerHTML=
-`<div class="empty">Obteniendo datos reales...</div>`;
-
-table.style.display="none";
-
-try{
-
-const url=
-API+
-"?symbols="+
-encodeURIComponent(symbols.join(","));
-
-const response=await fetch(
-url,
-{
-method:"GET",
-cache:"no-store"
-}
-);
-
-const text=await response.text();
-
-if(!response.ok){
-
-throw new Error(
-"HTTP "+response.status+
-"\n"+
-text
-);
-
-}
-
-let result;
-
-try{
-
-result=JSON.parse(text);
-
-}catch(e){
-
-throw new Error(
-"El Worker no devolvió JSON válido.\n"+
-text.substring(0,1000)
-);
-
-}
-
-if(result.status!=="ok"){
-
-throw new Error(
-result.message||
-"El Worker devolvió un error."
-);
-
-}
-
-let workerData=result.data;
-
-if(
-workerData&&
-workerData.data&&
-typeof workerData.data==="object"
-){
-
-workerData=workerData.data;
-
-}
-
-const results=[];
-
-for(const symbol of symbols){
-
-let raw=workerData
-?workerData[symbol]
-:null;
-
-if(!raw){
-
-const key=Object.keys(workerData||{})
-.find(k=>k.toUpperCase()===symbol);
-
-if(key){
-raw=workerData[key];
-}
-
-}
-
-if(!raw){
-
-results.push({
-symbol,
-error:
-"No se recibieron datos para "+symbol+
-"."
-});
-
-continue;
-
-}
-
-if(raw.status==="error"){
-
-results.push({
-symbol,
-error:
-raw.message||
-"Error de Twelve Data para "+symbol
-});
-
-continue;
-
-}
-
-const resultData=analyze(symbol,raw);
-
-results.push(resultData);
-
-}
-
-cards.innerHTML=
-results.map(cardHTML).join("");
-
-tbody.innerHTML=
-results.map(tableHTML).join("");
-
-table.style.display="table";
-
-const ok=results.filter(x=>!x.error).length;
-
-status.innerHTML=
-`Análisis terminado: <strong>${ok}/${symbols.length}</strong> símbolos procesados.`;
-
-if(result.fetchedAt){
-
-status.innerHTML+=
-` · Actualizado: ${new Date(result.fetchedAt).toLocaleString()}`;
-
-}
-
-if(result.creditsUsed){
-
-status.innerHTML+=
-` · Créditos usados: ${result.creditsUsed}`;
-
-}
-
-if(result.creditsLeft){
-
-status.innerHTML+=
-` · Créditos restantes: ${result.creditsLeft}`;
-
-}
-
-}catch(error){
-
-console.error(error);
-
-cards.innerHTML=
-`
-<div class="errorbox">
-<strong>ERROR AL ANALIZAR</strong>
-
-${error.message}
-
-</div>
-`;
-
-table.style.display="none";
-
-status.textContent=
-"Error al obtener los datos.";
-
-}finally{
-
-button.disabled=false;
-button.textContent="ANALIZAR";
-
-}
-
-}
-
-loadDefault();
-
 </script>
 
 </body>
