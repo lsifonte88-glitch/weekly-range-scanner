@@ -16,7 +16,7 @@ font-family:Arial,sans-serif
 }
 
 .wrap{
-max-width:1800px;
+max-width:1900px;
 margin:auto;
 padding:22px
 }
@@ -108,7 +108,7 @@ overflow-x:auto
 table{
 width:100%;
 border-collapse:collapse;
-min-width:1700px
+min-width:1850px
 }
 
 th{
@@ -124,7 +124,8 @@ td{
 padding:12px 9px;
 border-bottom:1px solid #202c45;
 font-size:12px;
-vertical-align:top
+vertical-align:top;
+white-space:nowrap
 }
 
 tr:hover{
@@ -218,9 +219,19 @@ color:#7f8ba3
 }
 
 @media(max-width:700px){
-.wrap{padding:12px}
-h1{font-size:23px}
-textarea{min-width:100%}
+
+.wrap{
+padding:12px
+}
+
+h1{
+font-size:23px
+}
+
+textarea{
+min-width:100%
+}
+
 }
 </style>
 </head>
@@ -254,6 +265,8 @@ Preparado.
 <div class="note">
 El precio utilizado es el último cierre diario real disponible de Twelve Data.
 La fecha exacta del dato aparece en cada símbolo.
+El rango semanal en dólares se calcula directamente como Máximo semanal − Mínimo semanal.
+AWR 4S, 8S y 12S son promedios de rangos semanales reales en dólares.
 Máximo 8 símbolos por análisis para respetar el límite gratuito del proveedor.
 MSFT se excluye automáticamente.
 </div>
@@ -279,12 +292,12 @@ MSFT se excluye automáticamente.
 <th>#</th>
 <th>SÍMBOLO</th>
 <th>PRECIO</th>
-<th>FECHA</th>
-<th>RANGO SEMANAL</th>
+<th>FECHA DATO</th>
+<th>RANGO SEMANAL $</th>
 <th>% RANGO</th>
-<th>AWR 4S</th>
-<th>AWR 8S</th>
-<th>AWR 12S</th>
+<th>AWR 4S $</th>
+<th>AWR 8S $</th>
+<th>AWR 12S $</th>
 <th>RVOL 20D</th>
 <th>EMA 20</th>
 <th>EMA 50</th>
@@ -327,8 +340,11 @@ UTILIDADES
 ========================================================= */
 
 function num(x){
+
 const v=Number(x);
+
 return Number.isFinite(v)?v:0;
+
 }
 
 
@@ -337,24 +353,6 @@ function average(arr){
 if(!arr.length)return 0;
 
 return arr.reduce((a,b)=>a+b,0)/arr.length;
-
-}
-
-
-function percentile(values,p){
-
-if(!values.length)return 0;
-
-const a=[...values].sort((x,y)=>x-y);
-
-const index=(a.length-1)*p;
-
-const lo=Math.floor(index);
-const hi=Math.ceil(index);
-
-if(lo===hi)return a[lo];
-
-return a[lo]+(a[hi]-a[lo])*(index-lo);
 
 }
 
@@ -397,9 +395,36 @@ volume:num(x.volume)
 
 }))
 
-.filter(x=>x.datetime && x.close>0)
+.filter(x=>
+x.datetime &&
+x.close>0 &&
+x.high>0 &&
+x.low>0
+)
 
-.sort((a,b)=>new Date(a.datetime)-new Date(b.datetime));
+.sort((a,b)=>
+new Date(a.datetime)-new Date(b.datetime)
+);
+
+
+/* =========================================================
+ELIMINAR DUPLICADOS
+========================================================= */
+
+function dedupeValues(values){
+
+const map=new Map();
+
+for(const bar of values){
+
+map.set(bar.datetime,bar);
+
+}
+
+return [...map.values()]
+.sort((a,b)=>
+new Date(a.datetime)-new Date(b.datetime)
+);
 
 }
 
@@ -424,6 +449,10 @@ return d.toISOString().slice(0,10);
 
 }
 
+
+/* =========================================================
+DATOS SEMANALES REALES
+========================================================= */
 
 function weeklyData(values){
 
@@ -453,9 +482,22 @@ lastDate:""
 
 }
 
-weeks[key].high=Math.max(weeks[key].high,bar.high);
+weeks[key].high=
+Math.max(
+weeks[key].high,
+bar.high
+);
 
-weeks[key].low=Math.min(weeks[key].low,bar.low);
+weeks[key].low=
+Math.min(
+weeks[key].low,
+bar.low
+);
+
+if(
+!weeks[key].lastDate ||
+new Date(bar.datetime)>new Date(weeks[key].lastDate)
+){
 
 weeks[key].close=bar.close;
 
@@ -463,11 +505,28 @@ weeks[key].lastDate=bar.datetime;
 
 }
 
+}
+
 return Object.values(weeks)
 
-.filter(x=>x.high>-Infinity && x.low<Infinity)
+.filter(x=>
+x.high>-Infinity &&
+x.low<Infinity &&
+x.high>=x.low
+)
 
-.map(x=>({
+.map(x=>{
+
+const range=x.high-x.low;
+
+const pct=
+x.low>0
+?
+(range/x.low)*100
+:
+0;
+
+return {
 
 key:x.key,
 
@@ -479,13 +538,87 @@ close:x.close,
 
 lastDate:x.lastDate,
 
-range:x.high-x.low,
+range:range,
 
-pct:x.low>0 ? ((x.high-x.low)/x.low)*100 : 0
+pct:pct
 
-}))
+};
 
-.sort((a,b)=>a.key.localeCompare(b.key));
+})
+
+.sort((a,b)=>
+a.key.localeCompare(b.key)
+);
+
+}
+
+
+/* =========================================================
+FECHA ACTUAL NUEVA YORK
+========================================================= */
+
+function currentETInfo(){
+
+const parts=
+new Intl.DateTimeFormat("en-US",{
+
+timeZone:"America/New_York",
+
+weekday:"short",
+
+year:"numeric",
+
+month:"2-digit",
+
+day:"2-digit"
+
+}).formatToParts(new Date());
+
+const result={};
+
+for(const p of parts){
+
+if(p.type!=="literal"){
+
+result[p.type]=p.value;
+
+}
+
+}
+
+return result;
+
+}
+
+
+function currentETDate(){
+
+const x=currentETInfo();
+
+return x.year+"-"+x.month+"-"+x.day;
+
+}
+
+
+/* =========================================================
+SEMANA PARCIAL
+========================================================= */
+
+function isCurrentPartialWeek(key){
+
+const info=currentETInfo();
+
+const weekday=info.weekday;
+
+const isWeekday=
+weekday==="Mon" ||
+weekday==="Tue" ||
+weekday==="Wed" ||
+weekday==="Thu" ||
+weekday==="Fri";
+
+return isWeekday &&
+key===weekKey(currentETDate());
 
 }
 
@@ -498,13 +631,22 @@ function ema(values,length){
 
 if(values.length<length)return null;
 
-let e=average(values.slice(0,length));
+let e=
+average(
+values.slice(0,length)
+);
 
 const k=2/(length+1);
 
-for(let i=length;i<values.length;i++){
+for(
+let i=length;
+i<values.length;
+i++
+){
 
-e=values[i]*k+e*(1-k);
+e=
+values[i]*k+
+e*(1-k);
 
 }
 
@@ -514,50 +656,23 @@ return e;
 
 
 /* =========================================================
-FECHA NUEVA YORK
-========================================================= */
-
-function currentETDate(){
-
-return new Intl.DateTimeFormat("en-CA",{
-
-timeZone:"America/New_York",
-
-year:"numeric",
-
-month:"2-digit",
-
-day:"2-digit"
-
-}).format(new Date());
-
-}
-
-
-/* =========================================================
-SEMANA ACTUAL
-========================================================= */
-
-function isCurrentWeek(key){
-
-return key===weekKey(currentETDate());
-
-}
-
-
-/* =========================================================
-RVOL
+RVOL 20D
 ========================================================= */
 
 function calculateRVOL(values){
 
 if(values.length<21)return 0;
 
-const current=values[values.length-1];
+const current=
+values[values.length-1];
 
-const previous=values.slice(-21,-1);
+const previous=
+values.slice(-21,-1);
 
-const avgVol=average(previous.map(x=>x.volume));
+const avgVol=
+average(
+previous.map(x=>x.volume)
+);
 
 if(!avgVol)return 0;
 
@@ -570,9 +685,22 @@ return current.volume/avgVol;
 TENDENCIA
 ========================================================= */
 
-function calculateTrend(price,ema20,ema50,ema200){
+function calculateTrend(
+price,
+ema20,
+ema50,
+ema200
+){
 
-if(!ema20||!ema50||!ema200)return "SIN DATOS";
+if(
+ema20===null ||
+ema50===null ||
+ema200===null
+){
+
+return "SIN DATOS";
+
+}
 
 if(
 price>ema20 &&
@@ -618,70 +746,77 @@ return "NEUTRAL";
 
 
 /* =========================================================
-MOVIMIENTO ESTADÍSTICO
+PROYECCIÓN CORRECTA
+=========================================================
+
+IMPORTANTE:
+
+AWR está expresado en DÓLARES.
+
+Por eso la proyección también se calcula directamente
+en DÓLARES.
+
+No se convierte porcentaje a dólares.
 ========================================================= */
 
-function statisticalProjection(values,current,rvol,awr4,awr8,awr12){
+function statisticalProjection(
+current,
+rvol,
+awr4,
+awr8,
+awr12
+){
 
-const movements=[];
+const baseValues=
+[awr4,awr8,awr12]
+.filter(x=>x>0);
 
-for(let i=20;i<values.length;i++){
+if(!baseValues.length){
 
-const previous=values.slice(i-20,i);
-
-const avgVolume=average(
-previous.map(x=>x.volume)
-);
-
-if(!avgVolume)continue;
-
-const localRVOL=values[i].volume/avgVolume;
-
-if(localRVOL<0.70)continue;
-
-if(localRVOL>2.50)continue;
-
-const start=Math.max(0,i-4);
-
-const sample=values.slice(start,i+1);
-
-if(sample.length<2)continue;
-
-const high=Math.max(
-...sample.map(x=>x.high)
-);
-
-const low=Math.min(
-...sample.map(x=>x.low)
-);
-
-if(low<=0)continue;
-
-const movement=((high-low)/low)*100;
-
-if(movement>0 && movement<100){
-
-movements.push(movement);
+return null;
 
 }
 
-}
 
-let base=average(
-[awr4,awr8,awr12].filter(x=>x>0)
+/* PROMEDIO DE AWR */
+
+const base=
+average(baseValues);
+
+
+/* AJUSTE POR RVOL */
+
+let factor=
+Math.sqrt(
+Math.max(rvol,0.25)
 );
 
-if(!base)return null;
 
-let factor=Math.sqrt(Math.max(rvol,0.25));
+/* EVITAR PROYECCIONES EXTREMAS */
 
-factor=Math.max(0.75,Math.min(1.75,factor));
+factor=
+Math.max(
+0.75,
+Math.min(1.75,factor)
+);
 
-let projectedRange=base*factor;
 
-const lower=current-(current*projectedRange/200);
+/* RANGO PROYECTADO EN DÓLARES */
 
-const upper=current+(current*projectedRange/200);
+const projectedRange=
+base*factor;
+
+
+/* MITAD DEL RANGO HACIA CADA LADO */
+
+const lower=
+Math.max(
+0,
+current-projectedRange
+);
+
+const upper=
+current+projectedRange;
 
 return {
 
@@ -689,9 +824,7 @@ lower:lower,
 
 upper:upper,
 
-range:projectedRange,
-
-samples:movements.length
+range:projectedRange
 
 };
 
@@ -707,7 +840,9 @@ function calculateScore(data){
 let score=0;
 
 
-/* TREND 30 */
+/* ---------------------------------------------------------
+TREND = 30
+--------------------------------------------------------- */
 
 if(data.price>data.ema20)
 score+=7;
@@ -722,7 +857,9 @@ if(data.price>data.ema200)
 score+=7;
 
 
-/* MOMENTUM 20 */
+/* ---------------------------------------------------------
+MOMENTUM = 20
+--------------------------------------------------------- */
 
 if(data.momentum>10)
 score+=20;
@@ -740,7 +877,9 @@ else
 score+=2;
 
 
-/* VOLUME 20 */
+/* ---------------------------------------------------------
+VOLUME = 20
+--------------------------------------------------------- */
 
 if(data.rvol>=1.5)
 score+=13;
@@ -765,20 +904,35 @@ else if(data.volumeTrend>0)
 score+=2;
 
 
-/* RANGE 15 */
+/* ---------------------------------------------------------
+RANGE = 15
+--------------------------------------------------------- */
 
 if(data.awr4>0){
 
-const ratio=data.weeklyRange/data.awr4;
+const ratio=
+data.weeklyRange/data.awr4;
 
-if(ratio>=0.8 && ratio<=1.5)
+if(
+ratio>=0.8 &&
+ratio<=1.5
+){
+
 score+=6;
 
-else if(ratio<0.8)
+}
+
+else if(ratio<0.8){
+
 score+=4;
 
-else
+}
+
+else{
+
 score+=2;
+
+}
 
 }
 
@@ -792,14 +946,18 @@ score+=9;
 
 }
 
-else if(data.awr4>=data.awr12){
+else if(
+data.awr4>=data.awr12
+){
 
 score+=5;
 
 }
 
 
-/* STRUCTURE 15 */
+/* ---------------------------------------------------------
+STRUCTURE = 15
+--------------------------------------------------------- */
 
 if(
 data.position>=55 &&
@@ -810,13 +968,17 @@ score+=8;
 
 }
 
-else if(data.position>90){
+else if(
+data.position>90
+){
 
 score+=5;
 
 }
 
-else if(data.position>=40){
+else if(
+data.position>=40
+){
 
 score+=4;
 
@@ -830,9 +992,14 @@ if(data.price>data.ema200)
 score+=3;
 
 
-/* NORMALIZAR */
+/* ---------------------------------------------------------
+LIMITAR 0-100
+--------------------------------------------------------- */
 
-return Math.max(0,Math.min(100,score));
+return Math.max(
+0,
+Math.min(100,score)
+);
 
 }
 
@@ -843,33 +1010,60 @@ SEÑAL
 
 function signal(score){
 
-if(score>=80)
+if(score>=80){
+
 return {
+
 text:"STRONG BUY",
+
 className:"buy"
+
 };
 
-if(score>=65)
+}
+
+if(score>=65){
+
 return {
+
 text:"BUY",
+
 className:"buy"
+
 };
 
-if(score>=50)
+}
+
+if(score>=50){
+
 return {
+
 text:"WATCH",
+
 className:"watch"
+
 };
 
-if(score>=35)
+}
+
+if(score>=35){
+
 return {
+
 text:"NEUTRAL",
+
 className:"neutral"
+
 };
 
+}
+
 return {
+
 text:"AVOID",
+
 className:"avoid"
+
 };
 
 }
@@ -879,9 +1073,19 @@ className:"avoid"
 CALCULAR SÍMBOLO
 ========================================================= */
 
-function calculate(symbol,rawValues){
+function calculate(
+symbol,
+rawValues
+){
 
-const values=normalizeValues(rawValues);
+let values=
+normalizeValues(rawValues);
+
+values=
+dedupeValues(values);
+
+
+/* NECESITAMOS HISTORIAL SUFICIENTE */
 
 if(values.length<200){
 
@@ -889,125 +1093,236 @@ return null;
 
 }
 
-const closes=values.map(x=>x.close);
 
-const currentBar=values[values.length-1];
-
-const price=currentBar.close;
-
-const weeks=weeklyData(values);
-
-if(weeks.length<13)return null;
+const closes=
+values.map(x=>x.close);
 
 
-/* SEMANA */
-
-const latestWeek=weeks[weeks.length-1];
-
-const currentWeek=isCurrentWeek(latestWeek.key);
-
-const completedWeeks=currentWeek
-?weeks.slice(0,-1)
-:weeks;
+const currentBar=
+values[values.length-1];
 
 
-/* AWR */
+const price=
+currentBar.close;
 
-function awr(length){
 
-const data=completedWeeks.slice(-length);
+const weeks=
+weeklyData(values);
 
-if(!data.length)return 0;
 
-return average(data.map(x=>x.pct));
+if(weeks.length<13){
+
+return null;
 
 }
 
-const awr4=awr(4);
 
-const awr8=awr(8);
+/* =========================================================
+SEMANA MÁS RECIENTE
+========================================================= */
 
-const awr12=awr(12);
-
-
-/* RANGO SEMANAL */
-
-const weeklyRange=latestWeek.pct;
+const latestWeek=
+weeks[weeks.length-1];
 
 
-/* POSICIÓN DENTRO DEL RANGO */
+/* =========================================================
+RANGO SEMANAL REAL EN DÓLARES
 
-const rangePrice=latestWeek.high-latestWeek.low;
+ESTO ES LO IMPORTANTE:
+
+HIGH - LOW
+
+NO:
+
+PORCENTAJE * PRECIO
+
+========================================================= */
+
+const weeklyRange=
+latestWeek.range;
+
+
+/* =========================================================
+PORCENTAJE DEL RANGO
+========================================================= */
+
+const weeklyRangePct=
+latestWeek.pct;
+
+
+/* =========================================================
+SEMANAS COMPLETAS PARA AWR
+========================================================= */
+
+let completedWeeks=
+weeks.slice();
+
+
+if(
+isCurrentPartialWeek(latestWeek.key)
+){
+
+completedWeeks=
+weeks.slice(0,-1);
+
+}
+
+
+/* =========================================================
+AWR CORRECTO EN DÓLARES
+========================================================= */
+
+function awr(length){
+
+const data=
+completedWeeks.slice(-length);
+
+if(!data.length){
+
+return 0;
+
+}
+
+return average(
+data.map(x=>x.range)
+);
+
+}
+
+
+const awr4=
+awr(4);
+
+
+const awr8=
+awr(8);
+
+
+const awr12=
+awr(12);
+
+
+/* =========================================================
+POSICIÓN DENTRO DEL RANGO SEMANAL
+========================================================= */
+
+const rangePrice=
+latestWeek.high-
+latestWeek.low;
+
 
 let position=50;
+
 
 if(rangePrice>0){
 
 position=
-((price-latestWeek.low)/rangePrice)*100;
+(
+(price-latestWeek.low)/
+rangePrice
+)*100;
 
-position=Math.max(0,Math.min(100,position));
+
+position=
+Math.max(
+0,
+Math.min(100,position)
+);
 
 }
 
 
-/* EMA */
+/* =========================================================
+EMA
+========================================================= */
 
-const ema20=ema(closes,20);
+const ema20=
+ema(closes,20);
 
-const ema50=ema(closes,50);
+const ema50=
+ema(closes,50);
 
-const ema200=ema(closes,200);
-
-
-/* RVOL */
-
-const rvol=calculateRVOL(values);
+const ema200=
+ema(closes,200);
 
 
-/* MOMENTUM 20D */
+/* =========================================================
+RVOL
+========================================================= */
+
+const rvol=
+calculateRVOL(values);
+
+
+/* =========================================================
+MOMENTUM 20D
+========================================================= */
 
 let momentum=0;
 
+
 if(values.length>=21){
 
-const past=values[values.length-21].close;
+const past=
+values[
+values.length-21
+].close;
+
 
 if(past>0){
 
 momentum=
-((price-past)/past)*100;
+(
+(price-past)/
+past
+)*100;
 
 }
 
 }
 
 
-/* VOLUME TREND */
+/* =========================================================
+TENDENCIA DE VOLUMEN
+========================================================= */
 
 let volumeTrend=0;
 
+
 if(values.length>=41){
 
-const recent=average(
-values.slice(-20).map(x=>x.volume)
+const recent=
+average(
+values
+.slice(-20)
+.map(x=>x.volume)
 );
 
-const older=average(
-values.slice(-40,-20).map(x=>x.volume)
+
+const older=
+average(
+values
+.slice(-40,-20)
+.map(x=>x.volume)
 );
+
 
 if(older>0){
 
 volumeTrend=
-((recent-older)/older)*100;
+(
+(recent-older)/
+older
+)*100;
 
 }
 
 }
 
 
-/* TENDENCIA */
+/* =========================================================
+TENDENCIA
+========================================================= */
 
 const trend=
 calculateTrend(
@@ -1018,11 +1333,12 @@ ema200
 );
 
 
-/* PROYECCIÓN */
+/* =========================================================
+PROYECCIÓN
+========================================================= */
 
 const projection=
 statisticalProjection(
-values,
 price,
 rvol,
 awr4,
@@ -1030,6 +1346,10 @@ awr8,
 awr12
 );
 
+
+/* =========================================================
+OBJETO FINAL
+========================================================= */
 
 const data={
 
@@ -1040,6 +1360,8 @@ price:price,
 date:currentBar.datetime,
 
 weeklyRange:weeklyRange,
+
+weeklyRangePct:weeklyRangePct,
 
 awr4:awr4,
 
@@ -1066,11 +1388,17 @@ position:position
 };
 
 
-data.score=calculateScore(data);
+data.score=
+calculateScore(data);
 
-data.signal=signal(data.score);
 
-data.projection=projection;
+data.signal=
+signal(data.score);
+
+
+data.projection=
+projection;
+
 
 return data;
 
@@ -1086,7 +1414,10 @@ async function getBatch(symbols){
 const url=
 API_URL+
 "?symbols="+
-encodeURIComponent(symbols.join(","));
+encodeURIComponent(
+symbols.join(",")
+);
+
 
 const response=
 await fetch(
@@ -1096,6 +1427,7 @@ cache:"no-store"
 }
 );
 
+
 if(!response.ok){
 
 throw new Error(
@@ -1104,8 +1436,10 @@ throw new Error(
 
 }
 
+
 const data=
 await response.json();
+
 
 if(data.status!=="ok"){
 
@@ -1115,6 +1449,7 @@ data.message||
 );
 
 }
+
 
 return data;
 
@@ -1130,10 +1465,17 @@ function render(results){
 const tbody=
 document.getElementById("tbody");
 
+
 if(!results.length){
 
 tbody.innerHTML=
-'<tr><td colspan="17" class="loading">No se encontraron datos válidos.</td></tr>';
+`
+<tr>
+<td colspan="17" class="loading">
+No se encontraron datos válidos.
+</td>
+</tr>
+`;
 
 return;
 
@@ -1141,12 +1483,15 @@ return;
 
 
 tbody.innerHTML=
-results.map((x,index)=>{
+results.map(
+(x,index)=>{
+
 
 let trendClass="";
 
+
 if(
-x.trend==="BULLISH"||
+x.trend==="BULLISH" ||
 x.trend==="ALCISTA"
 ){
 
@@ -1155,7 +1500,7 @@ trendClass="green";
 }
 
 else if(
-x.trend==="BEARISH"||
+x.trend==="BEARISH" ||
 x.trend==="BAJISTA"
 ){
 
@@ -1164,8 +1509,13 @@ trendClass="red";
 }
 
 
+/* =======================================================
+PROYECCIÓN
+======================================================= */
+
 let projectionHTML=
 '<span class="gray">Sin datos</span>';
+
 
 if(x.projection){
 
@@ -1181,15 +1531,16 @@ ${money(x.projection.upper)}
 
 <div class="move-sub">
 
-Rango proyectado:
+Movimiento estimado:
 ${money(x.projection.range)}
+por lado
 
 </div>
 
 <div class="move-sub">
 
-Basado en AWR + RVOL
-· ${x.projection.samples} muestras
+Base:
+AWR 4S/8S/12S + RVOL
 
 </div>
 
@@ -1198,69 +1549,108 @@ Basado en AWR + RVOL
 }
 
 
+/* =======================================================
+FILA
+======================================================= */
+
 return `
 
 <tr>
 
-<td>${index+1}</td>
-
 <td>
-<div class="symbol">${x.symbol}</div>
+${index+1}
 </td>
 
 <td>
-<div class="price">${money(x.price)}</div>
+<div class="symbol">
+${x.symbol}
+</div>
 </td>
 
-<td>${x.date}</td>
-
-<td>${money(
-x.weeklyRange*x.price/100
-)}</td>
-
-<td>${percent(x.weeklyRange)}</td>
-
-<td>${percent(x.awr4)}</td>
-
-<td>${percent(x.awr8)}</td>
-
-<td>${percent(x.awr12)}</td>
-
-<td>${x.rvol.toFixed(2)}x</td>
-
-<td>${money(x.ema20)}</td>
-
-<td>${money(x.ema50)}</td>
-
-<td>${money(x.ema200)}</td>
+<td>
+<div class="price">
+${money(x.price)}
+</div>
+</td>
 
 <td>
+${x.date}
+</td>
+
+<td>
+<strong>
+${money(x.weeklyRange)}
+</strong>
+</td>
+
+<td>
+${percent(x.weeklyRangePct)}
+</td>
+
+<td>
+${money(x.awr4)}
+</td>
+
+<td>
+${money(x.awr8)}
+</td>
+
+<td>
+${money(x.awr12)}
+</td>
+
+<td>
+${x.rvol.toFixed(2)}x
+</td>
+
+<td>
+${money(x.ema20)}
+</td>
+
+<td>
+${money(x.ema50)}
+</td>
+
+<td>
+${money(x.ema200)}
+</td>
+
+<td>
+
 <span class="badge ${trendClass}">
 ${x.trend}
 </span>
+
 </td>
 
 <td>
+
 <span class="score">
 ${x.score}/100
 </span>
+
 </td>
 
 <td>
+
 <span class="${x.signal.className}">
 ${x.signal.text}
 </span>
+
 </td>
 
 <td>
+
 ${projectionHTML}
+
 </td>
 
 </tr>
 
 `;
 
-}).join("");
+}
+).join("");
 
 }
 
@@ -1274,8 +1664,10 @@ async function analyze(){
 const button=
 document.getElementById("analyzeBtn");
 
+
 const status=
 document.getElementById("status");
+
 
 const input=
 document.getElementById("symbols");
@@ -1294,7 +1686,9 @@ input.value
 
 .filter(x=>x!=="MSFT")
 
-.filter(x=>/^[A-Z0-9.-]+$/.test(x));
+.filter(
+x=>/^[A-Z0-9.-]+$/.test(x)
+);
 
 
 symbols=
@@ -1312,13 +1706,22 @@ return;
 }
 
 
-input.value=symbols.join(",");
+input.value=
+symbols.join(",");
+
 
 button.disabled=true;
 
+
 document.getElementById("tbody").innerHTML=
 
-'<tr><td colspan="17" class="loading">Consultando datos reales de Twelve Data...</td></tr>';
+`
+<tr>
+<td colspan="17" class="loading">
+Consultando datos reales de Twelve Data...
+</td>
+</tr>
+`;
 
 
 status.textContent=
@@ -1331,6 +1734,7 @@ try{
 
 const response=
 await getBatch(symbols);
+
 
 const results=[];
 
@@ -1383,13 +1787,20 @@ errors++;
 }
 
 
-/* RANKING */
+/* =======================================================
+RANKING
+======================================================= */
 
 results.sort(
 (a,b)=>{
 
-if(b.score!==a.score)
+if(
+b.score!==a.score
+){
+
 return b.score-a.score;
+
+}
 
 return b.weeklyRange-a.weeklyRange;
 
@@ -1400,9 +1811,14 @@ return b.weeklyRange-a.weeklyRange;
 render(results);
 
 
+/* =======================================================
+CRÉDITOS
+======================================================= */
+
 const creditsUsed=
 response.creditsUsed||
 "";
+
 
 const creditsLeft=
 response.creditsLeft||
@@ -1447,20 +1863,23 @@ errors+
 
 message+=
 " · Actualizado: "+
-new Date().toLocaleString("es-US");
+new Date().toLocaleString(
+"es-US"
+);
 
 
-status.textContent=message;
+status.textContent=
+message;
 
 
 }catch(error){
 
 console.error(error);
 
+
 document.getElementById("tbody").innerHTML=
 
 `
-
 <tr>
 
 <td colspan="17" class="loading error">
@@ -1470,13 +1889,11 @@ Error: ${error.message}
 </td>
 
 </tr>
-
 `;
 
 
 status.textContent=
 "No se pudo completar el análisis.";
-
 
 }finally{
 
@@ -1496,13 +1913,11 @@ function resetList(){
 document.getElementById("symbols").value=
 "NVDA,META,AMZN,GOOGL,UBER,NFLX,QQQM,PLTR";
 
-analyze();
-
 }
 
 
 /* =========================================================
-ENTER / CTRL+ENTER
+CTRL + ENTER
 ========================================================= */
 
 document
@@ -1527,17 +1942,14 @@ analyze();
 
 
 /* =========================================================
-INICIO AUTOMÁTICO
+IMPORTANTE:
+
+NO hacemos análisis automático al cargar.
+
+Cada análisis consume créditos de Twelve Data.
+
+El usuario decide cuándo actualizar.
 ========================================================= */
-
-window.addEventListener(
-"load",
-function(){
-
-analyze();
-
-}
-);
 
 </script>
 
