@@ -76,6 +76,11 @@ background:#2563eb;
 color:white;
 }
 
+#discoverBtn{
+background:#059669;
+color:white;
+}
+
 #resetBtn{
 background:#26344a;
 color:white;
@@ -264,6 +269,15 @@ color:#7f90a8;
 margin-top:8px;
 }
 
+.discovered{
+margin-top:12px;
+padding:12px;
+background:#0b1322;
+border:1px solid #26344a;
+border-radius:9px;
+color:#9fb0c8;
+}
+
 @media(max-width:700px){
 .wrap{padding:12px}
 h1{font-size:23px}
@@ -286,12 +300,27 @@ Scanner de rango semanal, AWR, RVOL, EMA, Momentum y Swing Score para acciones y
 <textarea id="symbols">NVDA,META,AMZN,GOOGL,UBER,NFLX,QQQM,PLTR</textarea>
 
 <div class="controls">
-<button id="analyzeBtn">ANALIZAR</button>
-<button id="resetBtn">DEFAULT</button>
+
+<button id="discoverBtn">
+BUSCAR NUEVOS
+</button>
+
+<button id="analyzeBtn">
+ANALIZAR
+</button>
+
+<button id="resetBtn">
+DEFAULT
+</button>
+
 </div>
 
 <div id="status" class="status">
-Listo para analizar.
+Listo. Puedes analizar símbolos manualmente o buscar 8 candidatos nuevos.
+</div>
+
+<div id="discovered" class="discovered">
+Sin candidatos nuevos seleccionados.
 </div>
 
 </div>
@@ -346,28 +375,46 @@ Listo para analizar.
 const API_URL =
 "https://weekly-range-api.changowalu.workers.dev/api";
 
+const UNIVERSE_URL =
+"https://weekly-range-api.changowalu.workers.dev/universe";
+
 const DEFAULT_SYMBOLS =
-["NVDA","META","AMZN","GOOGL","UBER","NFLX","QQQM","PLTR"];
+[
+"NVDA",
+"META",
+"AMZN",
+"GOOGL",
+"UBER",
+"NFLX",
+"QQQM",
+"PLTR"
+];
 
 const MAX_SYMBOLS = 8;
 
 const $ = id => document.getElementById(id);
 
 const analyzeBtn = $("analyzeBtn");
+const discoverBtn = $("discoverBtn");
 const resetBtn = $("resetBtn");
+
 const symbolsInput = $("symbols");
 const statusBox = $("status");
 const cardsBox = $("cards");
 const tableBody = $("tableBody");
 const summaryBox = $("summary");
+const discoveredBox = $("discovered");
 
 function average(arr){
 
-const valid = arr.filter(
+const valid =
+arr.filter(
 x => Number.isFinite(x)
 );
 
-if(!valid.length) return null;
+if(!valid.length){
+return null;
+}
 
 return valid.reduce(
 (a,b)=>a+b,
@@ -564,16 +611,6 @@ a.key.localeCompare(b.key)
 
 }
 
-/*
-Una semana de mercado se considera completa
-cuando el último día disponible es viernes.
-Si el día actual es lunes-jueves y la última semana
-es la semana actual, esa semana todavía es parcial.
-
-El fin de semana la última semana disponible
-(viernes) se considera completa.
-*/
-
 function isCurrentPartialWeek(weekKeyValue){
 
 const now =
@@ -631,14 +668,6 @@ currentDate
 .toISOString()
 .slice(0,10)
 );
-
-/*
-Viernes, sábado y domingo:
-la semana de mercado anterior ya está completa.
-
-Lunes-jueves:
-la semana actual todavía está abierta.
-*/
 
 const partialDays =
 ["Mon","Tue","Wed","Thu"];
@@ -833,10 +862,6 @@ position
 
 let score = 0;
 
-/*
-TREND = 30
-*/
-
 if(
 Number.isFinite(ema20) &&
 price>ema20
@@ -867,10 +892,6 @@ price>ema200
 score+=7;
 }
 
-/*
-MOMENTUM = 20
-*/
-
 if(Number.isFinite(momentum)){
 
 if(momentum>10){
@@ -890,10 +911,6 @@ score+=2;
 }
 
 }
-
-/*
-VOLUME = 20
-*/
 
 if(Number.isFinite(rvol)){
 
@@ -925,10 +942,6 @@ score+=2;
 }
 
 }
-
-/*
-RANGE = 15
-*/
 
 if(
 Number.isFinite(currentRange) &&
@@ -973,10 +986,6 @@ score+=5;
 }
 
 }
-
-/*
-STRUCTURE = 15
-*/
 
 if(Number.isFinite(position)){
 
@@ -1070,29 +1079,6 @@ return "BEARISH";
 return "NEUTRAL";
 
 }
-
-/*
-PROYECCIÓN AWR + RVOL
-
-Base:
-promedio de AWR 4/8/12.
-
-Factor RVOL:
-sqrt(RVOL).
-
-Límite:
-0.75x mínimo.
-1.75x máximo.
-
-El resultado representa el movimiento
-estimado desde el precio actual hacia cada lado.
-
-Por eso:
-
-LOW  = precio - movimiento
-HIGH = precio + movimiento
-RANGE TOTAL = movimiento * 2
-*/
 
 function awrRvolProjection(
 current,
@@ -1214,14 +1200,6 @@ symbol+
 );
 
 }
-
-/*
-La última semana disponible
-se utiliza para el rango semanal actual.
-
-Las AWR utilizan exclusivamente
-semanas completas.
-*/
 
 const latestWeek =
 weeks[weeks.length-1];
@@ -1450,6 +1428,364 @@ json.message||
 }
 
 return json;
+
+}
+
+/*
+=========================================================
+BUSCADOR DINÁMICO
+=========================================================
+*/
+
+async function fetchUniverse(){
+
+const response =
+await fetch(
+UNIVERSE_URL+
+"?_="+
+Date.now(),
+{
+method:"GET",
+cache:"no-store"
+}
+);
+
+let json;
+
+try{
+
+json =
+await response.json();
+
+}
+catch(e){
+
+throw new Error(
+"El universo devolvió una respuesta inválida."
+);
+
+}
+
+if(!response.ok){
+
+throw new Error(
+json.message||
+"Error HTTP "+
+response.status+
+" al consultar el universo."
+);
+
+}
+
+if(
+json.status!=="ok" ||
+!Array.isArray(json.symbols)
+){
+
+throw new Error(
+"No se pudo obtener el universo de símbolos."
+);
+
+}
+
+return json.symbols;
+
+}
+
+/*
+Símbolos que no queremos que aparezcan
+constantemente en la búsqueda automática.
+*/
+
+function getExcludedSymbols(){
+
+const stored =
+localStorage.getItem(
+"weeklyScannerSeen"
+);
+
+let seen=[];
+
+try{
+
+seen =
+stored
+?JSON.parse(stored)
+:[];
+
+}
+catch(e){
+
+seen=[];
+
+}
+
+if(!Array.isArray(seen)){
+seen=[];
+}
+
+return new Set(
+[
+...DEFAULT_SYMBOLS,
+...seen,
+"MSFT"
+]
+);
+
+}
+
+/*
+Guardamos los símbolos ya utilizados.
+Máximo 300 para no llenar localStorage.
+*/
+
+function rememberSymbols(symbols){
+
+const stored =
+localStorage.getItem(
+"weeklyScannerSeen"
+);
+
+let seen=[];
+
+try{
+
+seen =
+stored
+?JSON.parse(stored)
+:[];
+
+}
+catch(e){
+
+seen=[];
+}
+
+if(!Array.isArray(seen)){
+seen=[];
+}
+
+seen = [
+...new Set(
+[
+...seen,
+...symbols
+]
+)
+];
+
+if(seen.length>300){
+
+seen =
+seen.slice(
+seen.length-300
+);
+
+}
+
+localStorage.setItem(
+"weeklyScannerSeen",
+JSON.stringify(seen)
+);
+
+}
+
+/*
+Si ya vimos demasiados símbolos,
+reiniciamos el historial para poder
+volver a descubrir oportunidades.
+*/
+
+function selectNewSymbols(universe){
+
+const excluded =
+getExcludedSymbols();
+
+let candidates =
+universe
+.map(
+x=>
+String(x)
+.trim()
+.toUpperCase()
+)
+.filter(Boolean)
+.filter(
+x=>x!=="MSFT"
+)
+.filter(
+x=>
+/^[A-Z0-9.-]+$/.test(x)
+)
+.filter(
+x=>!excluded.has(x)
+);
+
+if(candidates.length<MAX_SYMBOLS){
+
+localStorage.removeItem(
+"weeklyScannerSeen"
+);
+
+const freshExcluded =
+new Set(
+[
+...DEFAULT_SYMBOLS,
+"MSFT"
+]
+);
+
+candidates =
+universe
+.map(
+x=>
+String(x)
+.trim()
+.toUpperCase()
+)
+.filter(Boolean)
+.filter(
+x=>x!=="MSFT"
+)
+.filter(
+x=>!freshExcluded.has(x)
+)
+.filter(
+x=>
+/^[A-Z0-9.-]+$/.test(x)
+);
+
+}
+
+/*
+Mezclamos aleatoriamente.
+Esto evita que el mismo grupo aparezca
+siempre en el mismo orden.
+*/
+
+for(
+let i=candidates.length-1;
+i>0;
+i--
+){
+
+const j =
+Math.floor(
+Math.random()*(i+1)
+);
+
+[
+candidates[i],
+candidates[j]
+] =
+[
+candidates[j],
+candidates[i]
+];
+
+}
+
+return candidates.slice(
+0,
+MAX_SYMBOLS
+);
+
+}
+
+async function discoverNewSymbols(){
+
+discoverBtn.disabled=true;
+analyzeBtn.disabled=true;
+resetBtn.disabled=true;
+
+statusBox.className="status";
+
+statusBox.textContent =
+"Buscando nuevos símbolos en el universo de acciones y ETF...";
+
+discoveredBox.textContent =
+"Consultando universo dinámico...";
+
+try{
+
+const universe =
+await fetchUniverse();
+
+if(!universe.length){
+
+throw new Error(
+"El universo está vacío."
+);
+
+}
+
+const selected =
+selectNewSymbols(
+universe
+);
+
+if(!selected.length){
+
+throw new Error(
+"No se encontraron candidatos nuevos."
+);
+
+}
+
+symbolsInput.value =
+selected.join(",");
+
+discoveredBox.innerHTML =
+"<strong>NUEVOS CANDIDATOS:</strong> "+
+selected.join(", ")+
+"<br><span class='small'>"+
+"Universo disponible: "+
+universe.length+
+" símbolos.</span>";
+
+statusBox.textContent =
+"Se encontraron "+
+selected.length+
+" candidatos nuevos. Analizándolos...";
+
+/*
+Los marcamos como vistos solamente
+después de haberlos seleccionado.
+*/
+
+rememberSymbols(
+selected
+);
+
+/*
+Analizamos inmediatamente.
+*/
+
+await analyze();
+
+}
+catch(error){
+
+statusBox.className="status error";
+
+statusBox.textContent =
+"Error al buscar nuevos símbolos: "+
+(
+error.message||
+String(error)
+);
+
+discoveredBox.textContent =
+"Sin candidatos nuevos.";
+
+}
+finally{
+
+discoverBtn.disabled=false;
+analyzeBtn.disabled=false;
+resetBtn.disabled=false;
+
+}
 
 }
 
@@ -1916,6 +2252,9 @@ cardsBox.innerHTML="";
 tableBody.innerHTML="";
 summaryBox.innerHTML="";
 
+discoveredBox.textContent =
+"Sin candidatos nuevos seleccionados.";
+
 statusBox.className="status";
 
 statusBox.textContent =
@@ -1951,6 +2290,7 @@ return;
 }
 
 analyzeBtn.disabled=true;
+discoverBtn.disabled=true;
 resetBtn.disabled=true;
 
 statusBox.className="status";
@@ -2125,6 +2465,7 @@ String(error)
 finally{
 
 analyzeBtn.disabled=false;
+discoverBtn.disabled=false;
 resetBtn.disabled=false;
 
 }
@@ -2136,15 +2477,15 @@ analyzeBtn.addEventListener(
 analyze
 );
 
+discoverBtn.addEventListener(
+"click",
+discoverNewSymbols
+);
+
 resetBtn.addEventListener(
 "click",
 resetList
 );
-
-/*
-NO hay análisis automático al cargar.
-Esto evita gastar créditos sin pulsar ANALIZAR.
-*/
 
 </script>
 
