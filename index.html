@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -5,175 +6,525 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Weekly Range Scanner PRO</title>
 <style>
-*{box-sizing:border-box}body{margin:0;background:#080d18;color:#e8edf7;font-family:Arial,sans-serif}.wrap{max-width:1800px;margin:auto;padding:24px}h1{margin:0;font-size:30px}.sub{color:#8f9bb2;margin:7px 0 20px}.panel{background:#111a2c;border:1px solid #263552;border-radius:12px;padding:18px;margin-bottom:18px}.controls{display:flex;gap:10px;flex-wrap:wrap}input{flex:1;min-width:320px;background:#080d18;border:1px solid #354463;color:#fff;border-radius:8px;padding:13px;font-size:15px}button{background:#2d6cdf;color:#fff;border:0;border-radius:8px;padding:12px 18px;font-weight:bold;cursor:pointer}button.secondary{background:#273650}button:disabled{opacity:.5;cursor:not-allowed}.status{margin-top:12px;color:#9ba8bf}.note{margin-top:8px;color:#7f8ba3;font-size:12px;line-height:1.5}.meta{display:flex;gap:18px;flex-wrap:wrap;margin-top:12px;color:#9ba8bf;font-size:12px}.table-wrap{overflow-x:auto}table{width:100%;border-collapse:collapse;min-width:1900px}th{color:#8f9bb2;font-size:12px;text-align:left;padding:12px 9px;border-bottom:1px solid #2a3752;white-space:nowrap}td{padding:12px 9px;border-bottom:1px solid #202c45;font-size:13px;vertical-align:top}.symbol{font-weight:bold;font-size:15px}.price{font-weight:bold;font-size:15px}.green{color:#62d99b}.red{color:#ff7777}.yellow{color:#ffd166}.gray{color:#8f9bb2}.badge{display:inline-block;padding:4px 7px;border-radius:5px;background:#1b2942}.score{font-size:16px;font-weight:bold}.move-main{font-weight:bold}.move-sub{font-size:11px;color:#8f9bb2;margin-top:4px}.flow{font-weight:bold}.loading{text-align:center;padding:30px;color:#8f9bb2}.bt-summary{display:flex;gap:24px;flex-wrap:wrap;margin:12px 0;color:#b8c3d8}.bt-table{min-width:900px}@media(max-width:700px){.wrap{padding:12px}h1{font-size:23px}input{min-width:100%}}
+*{box-sizing:border-box}
+body{margin:0;background:#080d18;color:#e8edf7;font-family:Arial,sans-serif}
+.wrap{max-width:1800px;margin:auto;padding:24px}
+h1{margin:0;font-size:30px}
+.sub{color:#8f9bb2;margin:7px 0 20px}
+.panel{background:#111a2c;border:1px solid #263552;border-radius:12px;padding:18px;margin-bottom:18px}
+.controls{display:flex;gap:10px;flex-wrap:wrap}
+input{flex:1;min-width:320px;background:#080d18;border:1px solid #354463;color:#fff;border-radius:8px;padding:13px;font-size:15px}
+button{background:#2d6cdf;color:#fff;border:0;border-radius:8px;padding:12px 18px;font-weight:bold;cursor:pointer}
+button.secondary{background:#273650}
+button:disabled{opacity:.5;cursor:not-allowed}
+.status{margin-top:12px;color:#9ba8bf}
+.note{margin-top:8px;color:#7f8ba3;font-size:12px;line-height:1.5}
+.meta{display:flex;gap:18px;flex-wrap:wrap;margin-top:12px;color:#9ba8bf;font-size:12px}
+.table-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:1900px}
+th{color:#8f9bb2;font-size:12px;text-align:left;padding:12px 9px;border-bottom:1px solid #2a3752;white-space:nowrap}
+td{padding:12px 9px;border-bottom:1px solid #202c45;font-size:13px;vertical-align:top}
+.symbol{font-weight:bold;font-size:15px}
+.price{font-weight:bold;font-size:15px}
+.green{color:#62d99b}
+.red{color:#ff7777}
+.yellow{color:#ffd166}
+.gray{color:#8f9bb2}
+.badge{display:inline-block;padding:4px 7px;border-radius:5px;background:#1b2942}
+.score{font-size:16px;font-weight:bold}
+.move-main{font-weight:bold}
+.move-sub{font-size:11px;color:#8f9bb2;margin-top:4px}
+.flow{font-weight:bold}
+.loading{text-align:center;padding:30px;color:#8f9bb2}
+.bt-summary{display:flex;gap:24px;flex-wrap:wrap;margin:12px 0;color:#b8c3d8}
+.bt-table{min-width:900px}
+@media(max-width:700px){
+  .wrap{padding:12px}
+  h1{font-size:23px}
+  input{min-width:100%}
+}
 </style>
 </head>
+
 <body>
 <div class="wrap">
+
 <h1>Weekly Range Scanner PRO</h1>
-<div class="sub">Acciones y ETF de EE. UU. · datos reales de Twelve Data · rango semanal · volumen · swing · flujo de dinero</div>
+<div class="sub">
+Acciones y ETF de EE. UU. · datos reales de Twelve Data · rango semanal · volumen · swing · flujo de dinero
+</div>
 
 <div class="panel">
 <div class="controls">
-<input id="symbols" value="NVDA,META,AMZN,GOOGL,UBER,NFLX,QQQM,PLTR" placeholder="Ejemplo: NVDA,META,AMZN">
+
+<input
+id="symbols"
+value="NVDA,META,AMZN,GOOGL,UBER,NFLX,QQQM,PLTR"
+placeholder="Ejemplo: NVDA,META,AMZN">
+
 <button id="newBtn" onclick="findNew()">BUSCAR NUEVOS</button>
 <button id="analyzeBtn" onclick="analyzeCurrent()">ANALIZAR</button>
 <button class="secondary" id="backtestBtn" onclick="runBacktest()">BACKTEST MONEY FLOW</button>
 <button class="secondary" id="resetBtn" onclick="resetList()">LISTA INICIAL</button>
+
 </div>
+
 <div id="status" class="status">Preparado.</div>
-<div class="note">El flujo de dinero es una estimación cuantitativa basada en precio + volumen: CMF20, presión intradía, volumen relativo y dollar volume. No identifica quién compró o vendió ni demuestra por sí solo actividad institucional.</div>
-<div class="meta"><div>Fuente: Twelve Data</div><div>Máximo: 8 símbolos</div><div>MSFT excluido</div><div>Orden: Money Flow Score</div></div>
+
+<div class="note">
+El flujo de dinero es una estimación cuantitativa basada en precio + volumen:
+CMF20, presión intradía, volumen relativo y dollar volume.
+No identifica quién compró o vendió ni demuestra por sí solo actividad institucional.
+</div>
+
+<div class="meta">
+<div>Fuente: Twelve Data</div>
+<div>Máximo: 8 símbolos</div>
+<div>MSFT excluido</div>
+<div>Orden: Money Flow Score</div>
+</div>
 </div>
 
 <div class="panel">
 <div class="table-wrap">
-<table><thead><tr>
-<th>SÍMBOLO</th><th>PRECIO</th><th>FECHA DATO</th><th>RANGO SEMANAL</th><th>AWR 4S</th><th>AWR 8S</th><th>AWR 12S</th><th>RVOL 20D</th><th>$ VOLUME</th><th>FLOW SCORE</th><th>FLUJO</th><th>CMF 20D</th><th>PRESIÓN 20D</th><th>TENDENCIA</th><th>SWING SCORE</th><th>MOVIMIENTO POR VOLUMEN</th>
-</tr></thead>
-<tbody id="tbody"><tr><td colspan="16" class="loading">Esperando análisis...</td></tr></tbody></table>
+
+<table>
+<thead>
+<tr>
+<th>SÍMBOLO</th>
+<th>PRECIO</th>
+<th>FECHA DATO</th>
+<th>RANGO SEMANAL</th>
+<th>AWR 4S</th>
+<th>AWR 8S</th>
+<th>AWR 12S</th>
+<th>RVOL 20D</th>
+<th>$ VOLUME</th>
+<th>FLOW SCORE</th>
+<th>FLUJO</th>
+<th>CMF 20D</th>
+<th>PRESIÓN 20D</th>
+<th>TENDENCIA</th>
+<th>SWING SCORE</th>
+<th>MOVIMIENTO POR VOLUMEN</th>
+</tr>
+</thead>
+
+<tbody id="tbody">
+<tr>
+<td colspan="16" class="loading">Esperando análisis...</td>
+</tr>
+</tbody>
+
+</table>
 </div>
 </div>
 
 <div class="panel" id="backtestPanel" style="display:none">
+
 <h3>Backtest Money Flow</h3>
-<div class="note">Cada señal histórica se clasifica por Flow Score y se mide contra el rendimiento posterior de 5, 10 y 20 días. Es una prueba descriptiva, no una garantía de rentabilidad futura.</div>
+
+<div class="note">
+Cada señal histórica se clasifica por Flow Score y se mide contra el rendimiento posterior de 5, 10 y 20 días.
+Es una prueba descriptiva, no una garantía de rentabilidad futura.
+</div>
+
 <div id="btSummary" class="bt-summary"></div>
+
 <div class="table-wrap">
-<table class="bt-table"><thead><tr><th>FLOW SCORE</th><th>SEÑALES</th><th>GANADORAS 5D</th><th>RET. MEDIO 5D</th><th>RET. MEDIO 10D</th><th>RET. MEDIO 20D</th><th>MEJOR 20D</th><th>PEOR 20D</th></tr></thead><tbody id="btBody"></tbody></table>
+
+<table class="bt-table">
+
+<thead>
+<tr>
+<th>FLOW SCORE</th>
+<th>SEÑALES</th>
+<th>GANADORAS 5D</th>
+<th>RET. MEDIO 5D</th>
+<th>RET. MEDIO 10D</th>
+<th>RET. MEDIO 20D</th>
+<th>MEJOR 20D</th>
+<th>PEOR 20D</th>
+</tr>
+</thead>
+
+<tbody id="btBody"></tbody>
+
+</table>
+
 </div>
 </div>
 
 <div class="panel">
+
 <h3>Cómo leer Money Flow</h3>
-<p class="note"><b>FLOW SCORE 70–100:</b> entrada compradora fuerte. <b>55–69:</b> entrada compradora. <b>45–54:</b> neutral. <b>31–44:</b> salida vendedora. <b>0–30:</b> salida fuerte.</p>
-<p class="note"><b>CMF20</b> mide presión acumulada de precio/volumen; <b>Presión20</b> compara el cierre con el rango de cada vela; <b>$ Volume</b> es precio × volumen del día. La combinación es más útil que cualquiera de estas métricas por separado.</p>
+
+<p class="note">
+<b>FLOW SCORE 70–100:</b> entrada compradora fuerte.
+<b>55–69:</b> entrada compradora.
+<b>45–54:</b> neutral.
+<b>31–44:</b> salida vendedora.
+<b>0–30:</b> salida fuerte.
+</p>
+
+<p class="note">
+<b>CMF20</b> mide presión acumulada de precio/volumen;
+<b>Presión20</b> compara el cierre con el rango de cada vela;
+<b>$ Volume</b> es precio × volumen del día.
+La combinación es más útil que cualquiera de estas métricas por separado.
+</p>
+
 </div>
+
 </div>
 
 <script>
+
 const API_URL="https://weekly-range-api.changowalu.workers.dev/api";
 const UNIVERSE_URL="https://weekly-range-api.changowalu.workers.dev/universe";
 const MAX_TICKERS=8;
 const SEEN_KEY="weeklyScannerSeenV4";
 
-function n(x){return Number(x)||0}
-function average(arr){return arr.length?arr.reduce((a,b)=>a+b,0)/arr.length:0}
-function percentile(values,p){if(!values.length)return 0;const a=[...values].sort((x,y)=>x-y),idx=(a.length-1)*p,lo=Math.floor(idx),hi=Math.ceil(idx);return lo===hi?a[lo]:a[lo]+(a[hi]-a[lo])*(idx-lo)}
-function normalizeValues(values){return(Array.isArray(values)?values:[]).map(x=>({datetime:String(x.datetime||""),open:n(x.open),high:n(x.high),low:n(x.low),close:n(x.close),volume:n(x.volume)})).filter(x=>x.datetime&&x.close>0).sort((a,b)=>new Date(a.datetime)-new Date(b.datetime))}
-function weekKey(value){const d=new Date(value),day=d.getUTCDay(),diff=day===0?-6:1-day;d.setUTCDate(d.getUTCDate()+diff);return d.toISOString().slice(0,10)}
-function weeklyData(values){const weeks={};for(const bar of values){const key=weekKey(bar.datetime);if(!weeks[key])weeks[key]={key,high:-Infinity,low:Infinity,close:0,lastDate:""};weeks[key].high=Math.max(weeks[key].high,bar.high);weeks[key].low=Math.min(weeks[key].low,bar.low);weeks[key].close=bar.close;weeks[key].lastDate=bar.datetime}return Object.values(weeks).filter(x=>x.high>-Infinity&&x.low<Infinity).map(x=>({key:x.key,high:x.high,low:x.low,close:x.close,lastDate:x.lastDate,pct:x.low>0?((x.high-x.low)/x.low)*100:0})).sort((a,b)=>a.key.localeCompare(b.key))}
-function ema(values,length){if(values.length<length)return null;let e=average(values.slice(0,length)),k=2/(length+1);for(let i=length;i<values.length;i++)e=values[i]*k+e*(1-k);return e}
-function currentETDate(){return new Intl.DateTimeFormat("en-CA",{timeZone:"America/New_York",year:"numeric",month:"2-digit",day:"2-digit"}).format(new Date())}
-function currentETWeekday(){return new Intl.DateTimeFormat("en-US",{timeZone:"America/New_York",weekday:"short"}).format(new Date())}
-function isWeekendET(){const d=currentETWeekday();return d==="Sat"||d==="Sun"}
+/* Guarda la última respuesta descargada.
+   El BACKTEST la reutiliza y evita una segunda llamada a Twelve Data. */
+let lastBatchResponse=null;
+
+function n(x){
+  return Number(x)||0;
+}
+
+function average(arr){
+  return arr.length
+    ? arr.reduce((a,b)=>a+b,0)/arr.length
+    : 0;
+}
+
+function percentile(values,p){
+  if(!values.length)return 0;
+
+  const a=[...values].sort((x,y)=>x-y);
+  const idx=(a.length-1)*p;
+  const lo=Math.floor(idx);
+  const hi=Math.ceil(idx);
+
+  return lo===hi
+    ? a[lo]
+    : a[lo]+(a[hi]-a[lo])*(idx-lo);
+}
+
+function normalizeValues(values){
+  return(Array.isArray(values)?values:[])
+    .map(x=>({
+      datetime:String(x.datetime||""),
+      open:n(x.open),
+      high:n(x.high),
+      low:n(x.low),
+      close:n(x.close),
+      volume:n(x.volume)
+    }))
+    .filter(x=>x.datetime&&x.close>0)
+    .sort((a,b)=>new Date(a.datetime)-new Date(b.datetime));
+}
+
+function weekKey(value){
+  const d=new Date(value);
+  const day=d.getUTCDay();
+  const diff=day===0?-6:1-day;
+
+  d.setUTCDate(d.getUTCDate()+diff);
+
+  return d.toISOString().slice(0,10);
+}
+
+function weeklyData(values){
+
+  const weeks={};
+
+  for(const bar of values){
+
+    const key=weekKey(bar.datetime);
+
+    if(!weeks[key]){
+      weeks[key]={
+        key,
+        high:-Infinity,
+        low:Infinity,
+        close:0,
+        lastDate:""
+      };
+    }
+
+    weeks[key].high=Math.max(weeks[key].high,bar.high);
+    weeks[key].low=Math.min(weeks[key].low,bar.low);
+    weeks[key].close=bar.close;
+    weeks[key].lastDate=bar.datetime;
+  }
+
+  return Object.values(weeks)
+    .filter(x=>x.high>-Infinity&&x.low<Infinity)
+    .map(x=>({
+      key:x.key,
+      high:x.high,
+      low:x.low,
+      close:x.close,
+      lastDate:x.lastDate,
+      pct:x.low>0?((x.high-x.low)/x.low)*100:0
+    }))
+    .sort((a,b)=>a.key.localeCompare(b.key));
+}
+
+function ema(values,length){
+
+  if(values.length<length)return null;
+
+  let e=average(values.slice(0,length));
+  const k=2/(length+1);
+
+  for(let i=length;i<values.length;i++){
+    e=values[i]*k+e*(1-k);
+  }
+
+  return e;
+}
+
+function currentETDate(){
+  return new Intl.DateTimeFormat("en-CA",{
+    timeZone:"America/New_York",
+    year:"numeric",
+    month:"2-digit",
+    day:"2-digit"
+  }).format(new Date());
+}
+
+function currentETWeekday(){
+  return new Intl.DateTimeFormat("en-US",{
+    timeZone:"America/New_York",
+    weekday:"short"
+  }).format(new Date());
+}
+
+function isWeekendET(){
+  const d=currentETWeekday();
+  return d==="Sat"||d==="Sun";
+}
 
 function moneyFlow(values){
-  const recent=values.slice(-20);let mfv=0,vol=0,pressureVol=0,upDollar=0,downDollar=0;
+
+  const recent=values.slice(-20);
+
+  let mfv=0;
+  let vol=0;
+  let pressureVol=0;
+  let upDollar=0;
+  let downDollar=0;
+
   for(const b of recent){
+
     const range=b.high-b.low;
-    const m=range>0?(((b.close-b.low)-(b.high-b.close))/range):0;
-    mfv+=m*b.volume;vol+=b.volume;
-    const p=range>0?(b.close-b.open)/range:0;pressureVol+=p*b.volume;
-    const dv=b.close*b.volume;if(b.close>b.open)upDollar+=dv;else if(b.close<b.open)downDollar+=dv;
+
+    const m=range>0
+      ?(((b.close-b.low)-(b.high-b.close))/range)
+      :0;
+
+    mfv+=m*b.volume;
+    vol+=b.volume;
+
+    const p=range>0
+      ?(b.close-b.open)/range
+      :0;
+
+    pressureVol+=p*b.volume;
+
+    const dv=b.close*b.volume;
+
+    if(b.close>b.open)upDollar+=dv;
+    else if(b.close<b.open)downDollar+=dv;
   }
-  const cmf=vol?mfv/vol:0,pressure=vol?pressureVol/vol:0;
-  const dollarVolume=values.length?values.at(-1).close*values.at(-1).volume:0;
-  const previous=values.slice(-21,-1).map(b=>b.close*b.volume),avgDollar=average(previous);
-  const dollarRvol=avgDollar?dollarVolume/avgDollar:0;
-  const priceChange=values.length>5?(values.at(-1).close/values.at(-6).close-1)*100:0;
+
+  const cmf=vol?mfv/vol:0;
+  const pressure=vol?pressureVol/vol:0;
+
+  const dollarVolume=values.length
+    ?values.at(-1).close*values.at(-1).volume
+    :0;
+
+  const previous=values
+    .slice(-21,-1)
+    .map(b=>b.close*b.volume);
+
+  const avgDollar=average(previous);
+
+  const dollarRvol=avgDollar
+    ?dollarVolume/avgDollar
+    :0;
+
+  const priceChange=values.length>5
+    ?(values.at(-1).close/values.at(-6).close-1)*100
+    :0;
+
   let score=50;
-  if(cmf>=.20)score+=25;else if(cmf>=.10)score+=20;else if(cmf>=.05)score+=15;else if(cmf>0)score+=8;else if(cmf<=-.20)score-=25;else if(cmf<=-.10)score-=20;else if(cmf<=-.05)score-=15;else if(cmf<0)score-=8;
-  if(pressure>=.20)score+=15;else if(pressure>=.08)score+=10;else if(pressure>0)score+=5;else if(pressure<=-.20)score-=15;else if(pressure<=-.08)score-=10;else if(pressure<0)score-=5;
-  if(priceChange>=3)score+=10;else if(priceChange>=1)score+=6;else if(priceChange>0)score+=3;else if(priceChange<=-3)score-=10;else if(priceChange<=-1)score-=6;else if(priceChange<0)score-=3;
-  if(dollarRvol>=2)score+=10;else if(dollarRvol>=1.5)score+=7;else if(dollarRvol>=1.2)score+=4;else if(dollarRvol<.7)score-=4;
+
+  if(cmf>=.20)score+=25;
+  else if(cmf>=.10)score+=20;
+  else if(cmf>=.05)score+=15;
+  else if(cmf>0)score+=8;
+  else if(cmf<=-.20)score-=25;
+  else if(cmf<=-.10)score-=20;
+  else if(cmf<=-.05)score-=15;
+  else if(cmf<0)score-=8;
+
+  if(pressure>=.20)score+=15;
+  else if(pressure>=.08)score+=10;
+  else if(pressure>0)score+=5;
+  else if(pressure<=-.20)score-=15;
+  else if(pressure<=-.08)score-=10;
+  else if(pressure<0)score-=5;
+
+  if(priceChange>=3)score+=10;
+  else if(priceChange>=1)score+=6;
+  else if(priceChange>0)score+=3;
+  else if(priceChange<=-3)score-=10;
+  else if(priceChange<=-1)score-=6;
+  else if(priceChange<0)score-=3;
+
+  if(dollarRvol>=2)score+=10;
+  else if(dollarRvol>=1.5)score+=7;
+  else if(dollarRvol>=1.2)score+=4;
+  else if(dollarRvol<.7)score-=4;
+
   score=Math.max(0,Math.min(100,Math.round(score)));
-  const label=score>=70?"ENTRADA FUERTE":score>=55?"ENTRADA":score>=45?"NEUTRAL":score>=31?"SALIDA":"SALIDA FUERTE";
-  const cls=score>=55?"green":score>=45?"yellow":"red";
-  return {cmf,pressure,dollarVolume,dollarRvol,priceChange,upDollar,downDollar,score,label,cls};
+
+  const label=
+    score>=70
+      ?"ENTRADA FUERTE"
+      :score>=55
+      ?"ENTRADA"
+      :score>=45
+      ?"NEUTRAL"
+      :score>=31
+      ?"SALIDA"
+      :"SALIDA FUERTE";
+
+  const cls=
+    score>=55
+      ?"green"
+      :score>=45
+      ?"yellow"
+      :"red";
+
+  return{
+    cmf,
+    pressure,
+    dollarVolume,
+    dollarRvol,
+    priceChange,
+    upDollar,
+    downDollar,
+    score,
+    label,
+    cls
+  };
 }
 
 function movementByVolume(values,current){
+
   const moves=[];
+
   for(let i=20;i<values.length;i++){
-    const prev=values.slice(i-20,i),avgVol=average(prev.map(x=>x.volume));if(!avgVol)continue;
-    const rvol=values[i].volume/avgVol;if(rvol<.70||rvol>1.50)continue;
-    const sample=values.slice(Math.max(0,i-4),i+1);if(sample.length<2)continue;
-    const hi=Math.max(...sample.map(x=>x.high)),lo=Math.min(...sample.map(x=>x.low));if(lo<=0)continue;
-    const pct=((hi-lo)/lo)*100;if(pct>0&&pct<100)moves.push(pct);
+
+    const prev=values.slice(i-20,i);
+    const avgVol=average(prev.map(x=>x.volume));
+
+    if(!avgVol)continue;
+
+    const rvol=values[i].volume/avgVol;
+
+    if(rvol<.70||rvol>1.50)continue;
+
+    const sample=values.slice(Math.max(0,i-4),i+1);
+
+    if(sample.length<2)continue;
+
+    const hi=Math.max(...sample.map(x=>x.high));
+    const lo=Math.min(...sample.map(x=>x.low));
+
+    if(lo<=0)continue;
+
+    const pct=((hi-lo)/lo)*100;
+
+    if(pct>0&&pct<100)moves.push(pct);
   }
-  if(moves.length<5)return '<span class="gray">Historial insuficiente</span>';
-  const p50=percentile(moves,.5),p75=percentile(moves,.75);
-  return `<div class="move-main green">$${current.toFixed(2)} → $${(current*(1+p50/100)).toFixed(2)} (+${p50.toFixed(1)}%)</div><div class="move-sub">P75: <span class="yellow">$${(current*(1+p75/100)).toFixed(2)} (+${p75.toFixed(1)}%)</span></div><div class="move-sub">${moves.length} comparables</div>`;
+
+  if(moves.length<5){
+    return '<span class="gray">Historial insuficiente</span>';
+  }
+
+  const p50=percentile(moves,.5);
+  const p75=percentile(moves,.75);
+
+  return `
+    <div class="move-main green">
+      $${current.toFixed(2)} → $${(current*(1+p50/100)).toFixed(2)}
+      (+${p50.toFixed(1)}%)
+    </div>
+
+    <div class="move-sub">
+      P75:
+      <span class="yellow">
+        $${(current*(1+p75/100)).toFixed(2)}
+        (+${p75.toFixed(1)}%)
+      </span>
+    </div>
+
+    <div class="move-sub">
+      ${moves.length} comparables
+    </div>
+  `;
 }
 
 function calculate(symbol,rawValues){
-  const values=normalizeValues(rawValues);if(values.length<30)return null;
-  const closes=values.map(x=>x.close),currentBar=values.at(-1),current=currentBar.close,weeks=weeklyData(values);if(!weeks.length)return null;
-  const latest=weeks.at(-1),latestIsCurrent=!isWeekendET()&&latest.key===weekKey(currentETDate()),completed=latestIsCurrent?weeks.slice(0,-1):weeks;
-  const awr=len=>average(completed.slice(-len).map(x=>x.pct));
-  const awr4=awr(4),awr8=awr(8),awr12=awr(12),weeklyRange=latest.pct;
-  const prev20=values.slice(-21,-1),avgVol=average(prev20.map(x=>x.volume)),rvol=avgVol?currentBar.volume/avgVol:0;
-  const ema20=ema(closes,20),ema50=ema(closes,50),ema200=ema(closes,200);
-  let trend="Neutral";
-  if(ema20&&ema50&&ema200){if(current>ema20&&ema20>ema50&&ema50>ema200)trend="Alcista fuerte";else if(current>ema20&&ema20>ema50)trend="Alcista";else if(current<ema20&&ema20<ema50&&ema50<ema200)trend="Bajista fuerte";else if(current<ema20&&ema20<ema50)trend="Bajista"}
-  let swingScore=0;if(ema20&&current>ema20)swingScore+=15;if(ema20&&ema50&&ema20>ema50)swingScore+=15;if(ema50&&ema200&&ema50>ema200)swingScore+=15;if(rvol>=1)swingScore+=15;if(awr4&&weeklyRange>=awr4)swingScore+=10;
-  const previous=closes.slice(-21,-1);if(previous.length&&current>Math.max(...previous))swingScore+=15;if(weeklyRange>=5)swingScore+=10;
-  return {symbol,current,date:currentBar.datetime,weeklyRange,awr4,awr8,awr12,rvol,trend,swingScore,movement:movementByVolume(values,current),...moneyFlow(values)};
-}
 
-async function getBatch(symbols){
-  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);
-  try{const r=await fetch(API_URL+"?symbols="+encodeURIComponent(symbols.join(",")),{cache:"no-store",signal:controller.signal});if(!r.ok)throw new Error("HTTP "+r.status);const data=await r.json();if(data.status!=="ok")throw new Error(data.message||"Error de API");return data}
-  catch(e){if(e.name==="AbortError")throw new Error("Tiempo de espera agotado (15 s). Twelve Data no respondió.");throw e}
-  finally{clearTimeout(timer)}
-}
+  const values=normalizeValues(rawValues);
 
-function render(results){
-  const tbody=document.getElementById("tbody");
-  if(!results.length){tbody.innerHTML='<tr><td colspan="16" class="loading">No se encontraron datos válidos.</td></tr>';return}
-  tbody.innerHTML=results.map(x=>{const tc=x.trend.includes("Alcista")?"green":x.trend.includes("Bajista")?"red":"";const vol=x.dollarVolume>=1e9?(x.dollarVolume/1e9).toFixed(2)+"B":(x.dollarVolume/1e6).toFixed(1)+"M";return `<tr><td><div class="symbol">${x.symbol}</div></td><td><div class="price">$${x.current.toFixed(2)}</div></td><td>${x.date}</td><td>${x.weeklyRange.toFixed(1)}%</td><td>${x.awr4.toFixed(1)}%</td><td>${x.awr8.toFixed(1)}%</td><td>${x.awr12.toFixed(1)}%</td><td>${x.rvol.toFixed(2)}x</td><td>$${vol}</td><td><span class="score ${x.cls}">${x.score}/100</span></td><td><span class="flow ${x.cls}">${x.label}</span><div class="move-sub">$RVOL ${x.dollarRvol.toFixed(2)}x · cambio 5D ${x.priceChange>=0?"+":""}${x.priceChange.toFixed(1)}%</div></td><td class="${x.cmf>=0?"green":"red"}">${x.cmf>=0?"+":""}${x.cmf.toFixed(3)}</td><td class="${x.pressure>=0?"green":"red"}">${x.pressure>=0?"+":""}${x.pressure.toFixed(3)}</td><td><span class="badge ${tc}">${x.trend}</span></td><td><span class="score">${x.swingScore}/100</span></td><td>${x.movement}</td></tr>`}).join("");
-}
+  if(values.length<30)return null;
 
-function getSeen(){try{return new Set(JSON.parse(localStorage.getItem(SEEN_KEY)||"[]"))}catch{return new Set()}}
-function saveSeen(set){localStorage.setItem(SEEN_KEY,JSON.stringify([...set]))}
+  const closes=values.map(x=>x.close);
+  const currentBar=values.at(-1);
+  const current=currentBar.close;
 
-async function fetchUniverse(){const r=await fetch(UNIVERSE_URL+"?v=moneyflow2",{cache:"no-store"});if(!r.ok)throw new Error("No se pudo cargar el universo");const d=await r.json();if(d.status!=="ok")throw new Error(d.message||"Universo inválido");return [...new Set(d.symbols)].filter(x=>x!=="MSFT")}
+  const weeks=weeklyData(values);
 
-async function analyzeSymbols(symbols,mode){
-  const button=mode==="new"?document.getElementById("newBtn"):document.getElementById("analyzeBtn");
-  button.disabled=true;document.getElementById("tbody").innerHTML='<tr><td colspan="16" class="loading">Consultando datos reales...</td></tr>';document.getElementById("status").textContent="Analizando "+symbols.length+" símbolos...";
-  try{const response=await getBatch(symbols),results=[];for(const symbol of symbols){const item=response.data?.[symbol];if(!item||item.status==="error")continue;const result=calculate(symbol,item.values);if(result)results.push(result)}results.sort((a,b)=>b.score-a.score);render(results);document.getElementById("symbols").value=symbols.join(",");document.getElementById("status").textContent="Listo · "+results.length+" analizados · ordenados por Money Flow · datos reales"+(response.creditsLeft?" · créditos restantes: "+response.creditsLeft:"");if(mode==="new"){const seen=getSeen();symbols.forEach(s=>seen.add(s));saveSeen(seen)}}
-  catch(e){document.getElementById("tbody").innerHTML=`<tr><td colspan="16" class="loading">Error: ${e.message}</td></tr>`;document.getElementById("status").textContent="No se pudo completar el análisis."}
-  finally{button.disabled=false}
-}
+  if(!weeks.length)return null;
 
-async function findNew(){
-  const btn=document.getElementById("newBtn");btn.disabled=true;document.getElementById("status").textContent="Buscando nuevos candidatos...";
-  try{const universe=await fetchUniverse(),seen=getSeen();let fresh=universe.filter(s=>!seen.has(s));if(fresh.length<MAX_TICKERS){localStorage.removeItem(SEEN_KEY);fresh=universe}await analyzeSymbols(fresh.slice(0,MAX_TICKERS),"new")}
-  catch(e){document.getElementById("status").textContent="Error: "+e.message}
-  finally{btn.disabled=false}
-}
+  const latest=weeks.at(-1);
 
-function getInputSymbols(){return[...new Set(document.getElementById("symbols").value.toUpperCase().split(",").map(x=>x.trim()).filter(Boolean).filter(x=>x!=="MSFT"))].slice(0,MAX_TICKERS)}
-function analyzeCurrent(){const symbols=getInputSymbols();if(!symbols.length){document.getElementById("status").textContent="Introduce al menos un símbolo.";return}analyzeSymbols(symbols,"current")}
-function resetList(){localStorage.removeItem(SEEN_KEY);const symbols=["NVDA","META","AMZN","GOOGL","UBER","NFLX","QQQM","PLTR"];document.getElementById("symbols").value=symbols.join(",");analyzeSymbols(symbols,"current")}
+  const latestIsCurrent=
+    !isWeekendET()&&
+    latest.key===weekKey(currentETDate());
 
-function flowBucket(score){if(score>=70)return"70–100";if(score>=55)return"55–69";if(score>=45)return"45–54";if(score>=31)return"31–44";return"0–30"}
-function backtestStats(values){const rows=[];for(let i=25;i<values.length-20;i++){const hist=values.slice(0,i+1),f=moneyFlow(hist),p=values[i].close;rows.push({bucket:flowBucket(f.score),r5:(values[i+5].close/p-1)*100,r10:(values[i+10].close/p-1)*100,r20:(values[i+20].close/p-1)*100})}return rows}
-function renderBacktest(rows){
-  const buckets=["70–100","55–69","45–54","31–44","0–30"],avg=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:0;
-  document.getElementById("btBody").innerHTML=buckets.map(b=>{const a=rows.filter(x=>x.bucket===b),r5=avg(a.map(x=>x.r5)),r10=avg(a.map(x=>x.r10)),r20=avg(a.map(x=>x.r20)),w=a.length?100*a.filter(x=>x.r5>0).length/a.length:0,best=a.length?Math.max(...a.map(x=>x.r20)):0,worst=a.length?Math.min(...a.map(x=>x.r20)):0;return `<tr><td><b>${b}</b></td><td>${a.length}</td><td>${w.toFixed(1)}%</td><td class="${r5>=0?"green":"red"}">${r5.toFixed(2)}%</td><td class="${r10>=0?"green":"red"}">${r10.toFixed(2)}%</td><td class="${r20>=0?"green":"red"}">${r20.toFixed(2)}%</td><td class="green">${best.toFixed(2)}%</td><td class="red">${worst.toFixed(2)}%</td></tr>`}).join("")
-}
-async function runBacktest(){
-  const btn=document.getElementById("backtestBtn"),symbols=getInputSymbols();if(!symbols.length){document.getElementById("status").textContent="Introduce al menos un símbolo.";return}
-  btn.disabled=true;document.getElementById("backtestPanel").style.display="block";document.getElementById("status").textContent="Ejecutando backtest histórico de Money Flow...";
-  try{const response=await getBatch(symbols),all=[];for(const symbol of symbols){const item=response.data?.[symbol];if(!item||item.status==="error")continue;const values=normalizeValues(item.values);if(values.length<46)continue;backtestStats(values).forEach(x=>all.push({...x,symbol}))}renderBacktest(all);const avg20=all.length?all.reduce((a,x)=>a+x.r20,0)/all.length:0,win20=all.length?100*all.filter(x=>x.r20>0).length/all.length:0;document.getElementById("btSummary").innerHTML=`<span>SEÑALES: <b>${all.length}</b></span><span>RET. MEDIO 20D: <b class="${avg20>=0?"green":"red"}">${avg20.toFixed(2)}%</b></span><span>GANADORAS 20D: <b class="${win20>=50?"green":"red"}">${win20.toFixed(1)}%</b></span><span>SÍMBOLOS: <b>${symbols.length}</b></span>`;document.getElementById("status").textContent="Backtest terminado · "+all.length+" señales históricas."}
-  catch(e){document.getElementById("status").textContent="Error en backtest: "+e.message}
-  finally{btn.disabled=false}
-}
+  const completed=
+    latestIsCurrent
+      ?weeks.slice(0,-1)
+      :weeks;
 
-window.addEventListener("load",()=>{document.getElementById("status").textContent="Preparado. Pulsa ANALIZAR para comenzar."})
-</script>
-</body>
-</html>
+  const awr=len=>
+    average(completed.slice(-len).map(x=>x.pct));
+
+  const awr4=awr(4);
+  const awr8=awr(8);
+  const awr12=awr(12);
+
+  const weeklyRange=latest.pct;
+
+  const prev20=values.slice(-21,-1);
+
+  const avgVol=average(prev20.map(x=>x.volume));
+
+  const rvol=avgVol
+    ?currentBar.volume/avgVol
+    :0;
+
+  const ema20=ema(closes,20);
+  const ema50=ema(closes,50);
+  const ema200=ema(closes,200);
+```
