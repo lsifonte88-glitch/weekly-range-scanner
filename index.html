@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="es">
 <head>
@@ -106,7 +107,7 @@ button:disabled{
 table{
   width:100%;
   border-collapse:collapse;
-  min-width:1450px;
+  min-width:2100px;
 }
 
 th{
@@ -167,10 +168,40 @@ tr:hover{
   font-weight:bold;
 }
 
+.flowScore{
+  font-size:16px;
+  font-weight:bold;
+}
+
+.flowStrong{
+  color:#62d99b;
+}
+
+.flowEntry{
+  color:#62d99b;
+}
+
+.flowNeutral{
+  color:#ffd166;
+}
+
+.flowExit{
+  color:#ff9999;
+}
+
+.flowStrongExit{
+  color:#ff6666;
+}
+
 .loading{
   text-align:center;
   padding:30px;
   color:#8f9bb2;
+}
+
+.small{
+  font-size:11px;
+  line-height:1.45;
 }
 
 @media(max-width:700px){
@@ -188,7 +219,7 @@ tr:hover{
 <h1>Weekly Range Scanner PRO</h1>
 
 <div class="sub">
-Acciones y ETF de EE. UU. · datos reales de Twelve Data · rango semanal · volumen · swing
+Acciones y ETF de EE. UU. · datos reales de Twelve Data · rango semanal · volumen · swing · money flow
 </div>
 
 <div class="panel">
@@ -234,6 +265,7 @@ BUSCAR NUEVOS obtiene candidatos del universo del scanner, evita repetir los ya 
 <div>Fuente: Twelve Data</div>
 <div>Máximo por análisis: 8 símbolos</div>
 <div>MSFT excluido</div>
+<div>FLOW SCORE = precio + volumen</div>
 </div>
 
 </div>
@@ -255,6 +287,11 @@ BUSCAR NUEVOS obtiene candidatos del universo del scanner, evita repetir los ya 
 <th>AWR 8S</th>
 <th>AWR 12S</th>
 <th>RVOL 20D</th>
+<th>$ VOLUME</th>
+<th>FLOW SCORE</th>
+<th>FLUJO</th>
+<th>CMF 20D</th>
+<th>PRESIÓN 20D</th>
 <th>TENDENCIA</th>
 <th>SWING SCORE</th>
 <th>MOVIMIENTO POR VOLUMEN</th>
@@ -265,7 +302,7 @@ BUSCAR NUEVOS obtiene candidatos del universo del scanner, evita repetir los ya 
 <tbody id="tbody">
 
 <tr>
-<td colspan="11" class="loading">
+<td colspan="16" class="loading">
 Esperando análisis...
 </td>
 </tr>
@@ -274,6 +311,31 @@ Esperando análisis...
 
 </table>
 
+</div>
+
+</div>
+
+<div class="panel">
+
+<strong>¿Cómo interpretar FLOW SCORE?</strong>
+
+<div class="note">
+70–100 = ENTRADA FUERTE ·
+55–69 = ENTRADA ·
+45–54 = NEUTRAL ·
+31–44 = SALIDA ·
+0–30 = SALIDA FUERTE
+</div>
+
+<div class="note">
+CMF 20D mide la presión acumulada de precio y volumen.
+PRESIÓN 20D compara la posición del cierre dentro del rango diario.
+$RVOL compara el volumen monetario actual contra el promedio de los 20 días anteriores.
+</div>
+
+<div class="note">
+El Money Flow es una estimación basada en precio y volumen.
+No demuestra por sí solo actividad institucional.
 </div>
 
 </div>
@@ -296,43 +358,55 @@ function n(x){
 
 function average(arr){
   if(!arr.length) return 0;
-  return arr.reduce((a,b)=>a+b,0)/arr.length;
+
+  return arr.reduce(
+    (a,b)=>a+b,
+    0
+  )/arr.length;
 }
 
 function percentile(values,p){
 
   if(!values.length) return 0;
 
-  const a=[...values].sort((x,y)=>x-y);
+  const a=[...values]
+    .sort((x,y)=>x-y);
 
-  const index=(a.length-1)*p;
+  const index=
+    (a.length-1)*p;
 
   const lo=Math.floor(index);
   const hi=Math.ceil(index);
 
-  if(lo===hi) return a[lo];
+  if(lo===hi)
+    return a[lo];
 
-  return a[lo] +
-    (a[hi]-a[lo])*(index-lo);
+  return a[lo]+
+    (a[hi]-a[lo])*
+    (index-lo);
 }
 
 function normalizeValues(values){
 
   return (Array.isArray(values)?values:[])
-  .map(x=>({
-    datetime:String(x.datetime||""),
-    open:n(x.open),
-    high:n(x.high),
-    low:n(x.low),
-    close:n(x.close),
-    volume:n(x.volume)
-  }))
-  .filter(x=>x.datetime&&x.close>0)
-  .sort(
-    (a,b)=>
-      new Date(a.datetime)-
-      new Date(b.datetime)
-  );
+    .map(x=>({
+      datetime:String(x.datetime||""),
+      open:n(x.open),
+      high:n(x.high),
+      low:n(x.low),
+      close:n(x.close),
+      volume:n(x.volume)
+    }))
+    .filter(
+      x=>
+        x.datetime &&
+        x.close>0
+    )
+    .sort(
+      (a,b)=>
+        new Date(a.datetime)-
+        new Date(b.datetime)
+    );
 }
 
 function weekKey(value){
@@ -342,13 +416,16 @@ function weekKey(value){
   const day=d.getUTCDay();
 
   const diff=
-    day===0 ? -6 : 1-day;
+    day===0
+    ? -6
+    : 1-day;
 
   d.setUTCDate(
     d.getUTCDate()+diff
   );
 
-  return d.toISOString().slice(0,10);
+  return d.toISOString()
+    .slice(0,10);
 }
 
 function weeklyData(values){
@@ -357,9 +434,11 @@ function weeklyData(values){
 
   for(const bar of values){
 
-    const key=weekKey(bar.datetime);
+    const key=
+      weekKey(bar.datetime);
 
     if(!weeks[key]){
+
       weeks[key]={
         key,
         high:-Infinity,
@@ -381,7 +460,8 @@ function weeklyData(values){
         bar.low
       );
 
-    weeks[key].close=bar.close;
+    weeks[key].close=
+      bar.close;
 
     weeks[key].lastDate=
       bar.datetime;
@@ -394,15 +474,18 @@ function weeklyData(values){
         x.low<Infinity
     )
     .map(x=>({
+
       key:x.key,
       high:x.high,
       low:x.low,
       close:x.close,
       lastDate:x.lastDate,
+
       pct:
         x.low>0
         ? ((x.high-x.low)/x.low)*100
         : 0
+
     }))
     .sort(
       (a,b)=>
@@ -420,13 +503,15 @@ function ema(values,length){
       values.slice(0,length)
     );
 
-  const k=2/(length+1);
+  const k=
+    2/(length+1);
 
   for(
     let i=length;
     i<values.length;
     i++
   ){
+
     e=
       values[i]*k+
       e*(1-k);
@@ -461,12 +546,17 @@ function currentETWeekday(){
 
 function isWeekendET(){
 
-  const d=currentETWeekday();
+  const d=
+    currentETWeekday();
 
-  return d==="Sat" || d==="Sun";
+  return d==="Sat" ||
+         d==="Sun";
 }
 
-function movementByVolume(values,current){
+function movementByVolume(
+  values,
+  current
+){
 
   const movements=[];
 
@@ -481,15 +571,22 @@ function movementByVolume(values,current){
 
     const avgVolume=
       average(
-        previous.map(x=>x.volume)
+        previous.map(
+          x=>x.volume
+        )
       );
 
-    if(!avgVolume) continue;
+    if(!avgVolume)
+      continue;
 
     const rvol=
-      values[i].volume/avgVolume;
+      values[i].volume/
+      avgVolume;
 
-    if(rvol<0.70 || rvol>1.50)
+    if(
+      rvol<0.70 ||
+      rvol>1.50
+    )
       continue;
 
     const start=
@@ -503,20 +600,28 @@ function movementByVolume(values,current){
 
     const high=
       Math.max(
-        ...sample.map(x=>x.high)
+        ...sample.map(
+          x=>x.high
+        )
       );
 
     const low=
       Math.min(
-        ...sample.map(x=>x.low)
+        ...sample.map(
+          x=>x.low
+        )
       );
 
-    if(low<=0) continue;
+    if(low<=0)
+      continue;
 
     const pct=
       ((high-low)/low)*100;
 
-    if(pct>0 && pct<100)
+    if(
+      pct>0 &&
+      pct<100
+    )
       movements.push(pct);
   }
 
@@ -524,22 +629,30 @@ function movementByVolume(values,current){
 
     return `
       <span class="gray">
-      Historial insuficiente
+        Historial insuficiente
       </span>
     `;
   }
 
   const p50=
-    percentile(movements,.50);
+    percentile(
+      movements,
+      .50
+    );
 
   const p75=
-    percentile(movements,.75);
+    percentile(
+      movements,
+      .75
+    );
 
   const price50=
-    current*(1+p50/100);
+    current*
+    (1+p50/100);
 
   const price75=
-    current*(1+p75/100);
+    current*
+    (1+p75/100);
 
   return `
     <div class="greenText">
@@ -562,19 +675,266 @@ function movementByVolume(values,current){
   `;
 }
 
-function calculate(symbol,rawValues){
+/* =========================
+   MONEY FLOW
+   ========================= */
+
+function moneyFlow(values){
+
+  const recent=
+    values.slice(-20);
+
+  let mfv=0;
+  let vol=0;
+  let pressureVol=0;
+
+  let upDollar=0;
+  let downDollar=0;
+
+  for(const b of recent){
+
+    const range=
+      b.high-b.low;
+
+    const m=
+      range>0
+      ? (
+          (
+            (b.close-b.low)-
+            (b.high-b.close)
+          )/range
+        )
+      : 0;
+
+    mfv+=m*b.volume;
+    vol+=b.volume;
+
+    const pressure=
+      range>0
+      ? (b.close-b.open)/range
+      : 0;
+
+    pressureVol+=
+      pressure*b.volume;
+
+    const dollarVolume=
+      b.close*b.volume;
+
+    if(b.close>b.open)
+      upDollar+=dollarVolume;
+
+    else if(b.close<b.open)
+      downDollar+=dollarVolume;
+  }
+
+  const cmf=
+    vol
+    ? mfv/vol
+    : 0;
+
+  const pressure=
+    vol
+    ? pressureVol/vol
+    : 0;
+
+  const dollarVolume=
+    values.length
+    ? values.at(-1).close*
+      values.at(-1).volume
+    : 0;
+
+  const previousDollarVolumes=
+    values
+      .slice(-21,-1)
+      .map(
+        b=>b.close*b.volume
+      );
+
+  const avgDollar=
+    average(
+      previousDollarVolumes
+    );
+
+  const dollarRvol=
+    avgDollar
+    ? dollarVolume/
+      avgDollar
+    : 0;
+
+  const priceChange=
+    values.length>5
+    ? (
+        values.at(-1).close/
+        values.at(-6).close-
+        1
+      )*100
+    : 0;
+
+  let score=50;
+
+  /* CMF */
+
+  if(cmf>=0.20)
+    score+=25;
+
+  else if(cmf>=0.10)
+    score+=20;
+
+  else if(cmf>=0.05)
+    score+=15;
+
+  else if(cmf>0)
+    score+=8;
+
+  else if(cmf<=-0.20)
+    score-=25;
+
+  else if(cmf<=-0.10)
+    score-=20;
+
+  else if(cmf<=-0.05)
+    score-=15;
+
+  else if(cmf<0)
+    score-=8;
+
+  /* PRESIÓN */
+
+  if(pressure>=0.20)
+    score+=15;
+
+  else if(pressure>=0.08)
+    score+=10;
+
+  else if(pressure>0)
+    score+=5;
+
+  else if(pressure<=-0.20)
+    score-=15;
+
+  else if(pressure<=-0.08)
+    score-=10;
+
+  else if(pressure<0)
+    score-=5;
+
+  /* CAMBIO 5D */
+
+  if(priceChange>=3)
+    score+=10;
+
+  else if(priceChange>=1)
+    score+=6;
+
+  else if(priceChange>0)
+    score+=3;
+
+  else if(priceChange<=-3)
+    score-=10;
+
+  else if(priceChange<=-1)
+    score-=6;
+
+  else if(priceChange<0)
+    score-=3;
+
+  /* $RVOL */
+
+  if(dollarRvol>=2)
+    score+=10;
+
+  else if(dollarRvol>=1.5)
+    score+=7;
+
+  else if(dollarRvol>=1.2)
+    score+=4;
+
+  else if(dollarRvol<0.7)
+    score-=4;
+
+  score=
+    Math.max(
+      0,
+      Math.min(
+        100,
+        Math.round(score)
+      )
+    );
+
+  let label;
+
+  if(score>=70)
+    label="ENTRADA FUERTE";
+
+  else if(score>=55)
+    label="ENTRADA";
+
+  else if(score>=45)
+    label="NEUTRAL";
+
+  else if(score>=31)
+    label="SALIDA";
+
+  else
+    label="SALIDA FUERTE";
+
+  let cls;
+
+  if(score>=70)
+    cls="flowStrong";
+
+  else if(score>=55)
+    cls="flowEntry";
+
+  else if(score>=45)
+    cls="flowNeutral";
+
+  else if(score>=31)
+    cls="flowExit";
+
+  else
+    cls="flowStrongExit";
+
+  return {
+    cmf,
+    pressure,
+    dollarVolume,
+    dollarRvol,
+    priceChange,
+    upDollar,
+    downDollar,
+    score,
+    label,
+    cls
+  };
+}
+
+/* =========================
+   CALCULAR
+   ========================= */
+
+function calculate(
+  symbol,
+  rawValues
+){
 
   const values=
-    normalizeValues(rawValues);
+    normalizeValues(
+      rawValues
+    );
 
   if(values.length<30)
     return null;
 
   const closes=
-    values.map(x=>x.close);
+    values.map(
+      x=>x.close
+    );
 
   const currentBar=
-    values[values.length-1];
+    values[
+      values.length-1
+    ];
 
   const current=
     currentBar.close;
@@ -586,12 +946,16 @@ function calculate(symbol,rawValues){
     return null;
 
   const latestWeek=
-    weeks[weeks.length-1];
+    weeks[
+      weeks.length-1
+    ];
 
   const latestWeekIsCurrent=
     !isWeekendET() &&
     latestWeek.key===
-    weekKey(currentETDate());
+    weekKey(
+      currentETDate()
+    );
 
   const completedWeeks=
     latestWeekIsCurrent
@@ -601,10 +965,14 @@ function calculate(symbol,rawValues){
   function awr(length){
 
     const data=
-      completedWeeks.slice(-length);
+      completedWeeks.slice(
+        -length
+      );
 
     return average(
-      data.map(x=>x.pct)
+      data.map(
+        x=>x.pct
+      )
     );
   }
 
@@ -620,12 +988,15 @@ function calculate(symbol,rawValues){
 
   const avgVolume=
     average(
-      previous20.map(x=>x.volume)
+      previous20.map(
+        x=>x.volume
+      )
     );
 
   const rvol=
     avgVolume
-    ? currentBar.volume/avgVolume
+    ? currentBar.volume/
+      avgVolume
     : 0;
 
   const ema20=
@@ -639,21 +1010,27 @@ function calculate(symbol,rawValues){
 
   let trend="Neutral";
 
-  if(ema20&&ema50&&ema200){
+  if(
+    ema20 &&
+    ema50 &&
+    ema200
+  ){
 
     if(
       current>ema20 &&
       ema20>ema50 &&
       ema50>ema200
     ){
-      trend="Alcista fuerte";
+      trend=
+        "Alcista fuerte";
     }
 
     else if(
       current>ema20 &&
       ema20>ema50
     ){
-      trend="Alcista";
+      trend=
+        "Alcista";
     }
 
     else if(
@@ -661,33 +1038,51 @@ function calculate(symbol,rawValues){
       ema20<ema50 &&
       ema50<ema200
     ){
-      trend="Bajista fuerte";
+      trend=
+        "Bajista fuerte";
     }
 
     else if(
       current<ema20 &&
       ema20<ema50
     ){
-      trend="Bajista";
+      trend=
+        "Bajista";
     }
   }
 
-  let score=0;
+  /* SWING SCORE */
 
-  if(ema20&&current>ema20)
-    score+=15;
+  let swingScore=0;
 
-  if(ema20&&ema50&&ema20>ema50)
-    score+=15;
+  if(
+    ema20 &&
+    current>ema20
+  )
+    swingScore+=15;
 
-  if(ema50&&ema200&&ema50>ema200)
-    score+=15;
+  if(
+    ema20 &&
+    ema50 &&
+    ema20>ema50
+  )
+    swingScore+=15;
+
+  if(
+    ema50 &&
+    ema200 &&
+    ema50>ema200
+  )
+    swingScore+=15;
 
   if(rvol>=1)
-    score+=15;
+    swingScore+=15;
 
-  if(awr4&&weeklyRange>=awr4)
-    score+=10;
+  if(
+    awr4 &&
+    weeklyRange>=awr4
+  )
+    swingScore+=10;
 
   const previous=
     closes.slice(-21,-1);
@@ -696,29 +1091,47 @@ function calculate(symbol,rawValues){
     previous.length &&
     current>Math.max(...previous)
   )
-    score+=15;
+    swingScore+=15;
 
   if(weeklyRange>=5)
-    score+=10;
+    swingScore+=10;
+
+  /* MONEY FLOW */
+
+  const flow=
+    moneyFlow(values);
 
   return {
+
     symbol,
     current,
     date:currentBar.datetime,
+
     weeklyRange,
+
     awr4,
     awr8,
     awr12,
+
     rvol,
+
     trend,
-    score,
+
+    swingScore,
+
     movement:
       movementByVolume(
         values,
         current
-      )
+      ),
+
+    ...flow
   };
 }
+
+/* =========================
+   API
+   ========================= */
 
 async function getBatch(symbols){
 
@@ -732,7 +1145,9 @@ async function getBatch(symbols){
   const response=
     await fetch(
       url,
-      {cache:"no-store"}
+      {
+        cache:"no-store"
+      }
     );
 
   if(!response.ok)
@@ -752,6 +1167,10 @@ async function getBatch(symbols){
   return data;
 }
 
+/* =========================
+   RENDER
+   ========================= */
+
 function render(results){
 
   const tbody=
@@ -761,15 +1180,15 @@ function render(results){
 
   if(!results.length){
 
-    tbody.innerHTML=
-      `
+    tbody.innerHTML=`
       <tr>
-        <td colspan="11"
+        <td colspan="16"
             class="loading">
-          No se encontraron datos válidos.
+          No se encontraron
+          datos válidos.
         </td>
       </tr>
-      `;
+    `;
 
     return;
   }
@@ -779,11 +1198,21 @@ function render(results){
 
       let trendClass="";
 
-      if(x.trend.includes("Alcista"))
-        trendClass="greenText";
+      if(
+        x.trend.includes(
+          "Alcista"
+        )
+      )
+        trendClass=
+          "greenText";
 
-      if(x.trend.includes("Bajista"))
-        trendClass="redText";
+      if(
+        x.trend.includes(
+          "Bajista"
+        )
+      )
+        trendClass=
+          "redText";
 
       return `
       <tr>
@@ -825,14 +1254,62 @@ function render(results){
         </td>
 
         <td>
-          <span class="badge ${trendClass}">
+          $${formatDollar(
+            x.dollarVolume
+          )}
+          <div class="gray small">
+            $RVOL:
+            ${x.dollarRvol.toFixed(2)}x
+          </div>
+        </td>
+
+        <td>
+          <span
+            class="flowScore ${x.cls}">
+            ${x.score}/100
+          </span>
+        </td>
+
+        <td>
+          <span
+            class="${x.cls}">
+            ${x.label}
+          </span>
+
+          <div class="gray small">
+            Cambio 5D:
+            ${x.priceChange>=0?"+":""}${x.priceChange.toFixed(1)}%
+          </div>
+        </td>
+
+        <td>
+          <span
+            class="${x.cmf>=0
+              ? "greenText"
+              : "redText"}">
+            ${x.cmf>=0?"+":""}${x.cmf.toFixed(3)}
+          </span>
+        </td>
+
+        <td>
+          <span
+            class="${x.pressure>=0
+              ? "greenText"
+              : "redText"}">
+            ${x.pressure>=0?"+":""}${x.pressure.toFixed(3)}
+          </span>
+        </td>
+
+        <td>
+          <span
+            class="badge ${trendClass}">
             ${x.trend}
           </span>
         </td>
 
         <td>
           <span class="score">
-            ${x.score}/100
+            ${x.swingScore}/100
           </span>
         </td>
 
@@ -845,6 +1322,30 @@ function render(results){
 
     }).join("");
 }
+
+function formatDollar(value){
+
+  if(value>=1000000000)
+    return (
+      value/1000000000
+    ).toFixed(2)+"B";
+
+  if(value>=1000000)
+    return (
+      value/1000000
+    ).toFixed(2)+"M";
+
+  if(value>=1000)
+    return (
+      value/1000
+    ).toFixed(0)+"K";
+
+  return value.toFixed(0);
+}
+
+/* =========================
+   ANALIZAR
+   ========================= */
 
 async function analyze(){
 
@@ -860,16 +1361,27 @@ async function analyze(){
 
   const symbols=[
     ...new Set(
+
       document
-      .getElementById("symbols")
-      .value
-      .toUpperCase()
-      .split(",")
-      .map(x=>x.trim())
-      .filter(Boolean)
-      .filter(x=>x!=="MSFT")
+        .getElementById(
+          "symbols"
+        )
+        .value
+        .toUpperCase()
+        .split(",")
+        .map(
+          x=>x.trim()
+        )
+        .filter(Boolean)
+        .filter(
+          x=>x!=="MSFT"
+        )
+
     )
-  ].slice(0,MAX_TICKERS);
+  ].slice(
+    0,
+    MAX_TICKERS
+  );
 
   if(!symbols.length){
 
@@ -883,15 +1395,14 @@ async function analyze(){
 
   document.getElementById(
     "tbody"
-  ).innerHTML=
-    `
+  ).innerHTML=`
     <tr>
-      <td colspan="11"
+      <td colspan="16"
           class="loading">
         Consultando datos reales...
       </td>
     </tr>
-    `;
+  `;
 
   status.textContent=
     "Consultando "+
@@ -901,7 +1412,9 @@ async function analyze(){
   try{
 
     const response=
-      await getBatch(symbols);
+      await getBatch(
+        symbols
+      );
 
     const results=[];
 
@@ -910,7 +1423,9 @@ async function analyze(){
     ){
 
       const item=
-        response.data?.[symbol];
+        response.data?.[
+          symbol
+        ];
 
       if(
         !item ||
@@ -928,8 +1443,14 @@ async function analyze(){
         results.push(result);
     }
 
+    /*
+      ORDEN PRINCIPAL:
+      MONEY FLOW SCORE
+    */
+
     results.sort(
-      (a,b)=>b.score-a.score
+      (a,b)=>
+        b.score-a.score
     );
 
     render(results);
@@ -951,15 +1472,14 @@ async function analyze(){
 
     document.getElementById(
       "tbody"
-    ).innerHTML=
-      `
+    ).innerHTML=`
       <tr>
-        <td colspan="11"
+        <td colspan="16"
             class="loading">
           Error: ${error.message}
         </td>
       </tr>
-      `;
+    `;
 
     status.textContent=
       "No se pudo completar el análisis.";
@@ -970,6 +1490,10 @@ async function analyze(){
     button.disabled=false;
   }
 }
+
+/* =========================
+   BUSCAR NUEVOS
+   ========================= */
 
 async function discoverNewSymbols(){
 
@@ -994,7 +1518,9 @@ async function discoverNewSymbols(){
       await fetch(
         UNIVERSE_URL+
         "?x="+Date.now(),
-        {cache:"no-store"}
+        {
+          cache:"no-store"
+        }
       );
 
     if(!response.ok)
@@ -1007,8 +1533,11 @@ async function discoverNewSymbols(){
 
     if(
       data.status!=="ok" ||
-      !Array.isArray(data.symbols)
+      !Array.isArray(
+        data.symbols
+      )
     ){
+
       throw new Error(
         "Universo no válido"
       );
@@ -1016,12 +1545,14 @@ async function discoverNewSymbols(){
 
     const universe=
       data.symbols
-      .filter(x=>x!=="MSFT");
+      .filter(
+        x=>x!=="MSFT"
+      );
 
     const seen=
       JSON.parse(
         localStorage.getItem(
-          "weeklyScannerSeen"
+          "weeklyScannerSeenV3"
         ) || "[]"
       );
 
@@ -1033,22 +1564,27 @@ async function discoverNewSymbols(){
         x=>!seenSet.has(x)
       );
 
-    if(candidates.length<MAX_TICKERS){
+    if(
+      candidates.length<
+      MAX_TICKERS
+    ){
 
       candidates=
         universe.slice();
     }
 
     const selected=
-      candidates
-      .slice(0,MAX_TICKERS);
+      candidates.slice(
+        0,
+        MAX_TICKERS
+      );
 
     selected.forEach(
       x=>seenSet.add(x)
     );
 
     localStorage.setItem(
-      "weeklyScannerSeen",
+      "weeklyScannerSeenV3",
       JSON.stringify(
         [...seenSet]
       )
@@ -1079,6 +1615,10 @@ async function discoverNewSymbols(){
   }
 }
 
+/* =========================
+   LISTA INICIAL
+   ========================= */
+
 function resetList(){
 
   document.getElementById(
@@ -1089,6 +1629,10 @@ function resetList(){
   analyze();
 }
 
+/* =========================
+   INICIO
+   ========================= */
+
 window.addEventListener(
   "load",
   analyze
@@ -1098,3 +1642,4 @@ window.addEventListener(
 
 </body>
 </html>
+```
