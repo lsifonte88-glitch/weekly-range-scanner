@@ -116,7 +116,7 @@ async function secFetch(url, env) {
 }
 
 async function secTickers(env) {
-  const r = await secFetch(SEC+"/files/company_tickers.json", env);
+  const r = await secFetch(SEC_WWW+"/files/company_tickers.json", env);
   if(r.status!==200) throw new Error("SEC ticker map HTTP "+r.status);
   const j=JSON.parse(r.text), map={};
   for(const k of Object.keys(j)){const x=j[k]; if(x?.ticker) map[String(x.ticker).toUpperCase()]=String(x.cik_str).padStart(10,"0");}
