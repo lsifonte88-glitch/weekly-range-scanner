@@ -230,6 +230,26 @@ function institutionalForName(name,snap,detail=false){
   const value=events.reduce((s,e)=>s+Number(e.value||0),0);
   return {signal:events.length?"HOLDING":"NEUTRAL",filers:new Set(events.map(e=>e.actor)).size,value,events:detail?events.slice(0,20):[],note:events.length?"Latest SEC 13F holdings; quarterly and not real-time.":"No matching 13F holding found in the configured manager sample."};
 }
+
+async function optionsFlowData(symbol, env){
+  const url=env.OPTIONS_FLOW_URL;
+  if(!url)return {enabled:false,signal:"OFF",callPutRatio:null,callVolume:0,putVolume:0,openInterestChange:null,note:"OPTIONS_FLOW_URL no configurado."};
+  try{
+    const u=new URL(url);
+    u.searchParams.set("symbol",symbol);
+    const r=await fetch(u.toString(),{headers:env.OPTIONS_FLOW_API_KEY?{"Authorization":"Bearer "+env.OPTIONS_FLOW_API_KEY}:{}});
+    if(!r.ok)throw Error("provider "+r.status);
+    const j=await r.json();
+    const callVolume=Number(j.callVolume??j.callsVolume??0),putVolume=Number(j.putVolume??j.putsVolume??0);
+    const ratio=putVolume>0?callVolume/putVolume:null;
+    const oi=Number(j.openInterestChange??j.oiChange??NaN);
+    let signal="NEUTRAL";
+    if(ratio!=null&&ratio>=1.5)signal="CALL_HEAVY";
+    else if(ratio!=null&&ratio<=0.67)signal="PUT_HEAVY";
+    return {enabled:true,signal,callPutRatio:ratio,callVolume,putVolume,openInterestChange:Number.isFinite(oi)?oi:null,asOf:j.asOf||j.timestamp||new Date().toISOString(),note:j.note||"Fuente externa de opciones."};
+  }catch(e){return {enabled:true,signal:"ERROR",callPutRatio:null,callVolume:0,putVolume:0,openInterestChange:null,note:"Error proveedor: "+e.message};}
+}
+
 function unusualSignal(v){
   const a=(v||[]).slice(-25); if(a.length<8)return {signal:"NEUTRAL",score:0,rvol:0,priceChange:0,volumeChange:0,reason:"Insufficient history"};
   const last=a.at(-1), prev=a.slice(0,-1), avgVol=avg(prev.slice(-20).map(x=>x.volume)), rv=avgVol?last.volume/avgVol:0;
