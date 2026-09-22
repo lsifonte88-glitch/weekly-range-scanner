@@ -84,9 +84,8 @@ export default {
           const etfs=await td("/etfs/list?country=United%20States&outputsize=1000",env);
           for(const x of (etfs.data?.result?.list||[])) names[String(x.symbol||"").toUpperCase()]=x.name||x.symbol;
         }catch(_){}
-        const institutionalSnap=await institutionalSnapshot(env);
-        const data=[];
-        for (const s of symbols) data.push(await smartMoneyData(s,env,detail,institutionalSnap,names[s]||s));
+        const [institutionalSnap, secMap] = await Promise.all([institutionalSnapshot(env), secTickers(env)]);
+        const data = await Promise.all(symbols.map(s => smartMoneyData(s,env,detail,institutionalSnap,names[s]||s,secMap)));
         return json({status:"ok",data,generatedAt:new Date().toISOString(),sources:{sec:true,twelveData:true,congress:Boolean(env.QUIVER_API_KEY||env.CONGRESS_API_URL),etf:Boolean(env.ETF_PROVIDER_URL||env.ETF_COMPOSITION_ENABLED==="true")}});
       }
 if (url.pathname === "/api") {
@@ -304,8 +303,8 @@ async function etfData(symbol,env,detail=false){
   }catch(e){return {signal:"NEUTRAL",holdings:[],note:e.message};}
 }
 
-async function smartMoneyData(symbol,env,detail=false,institutionalSnap=[],issuerName=""){
-  const map=await secTickers(env), cik=map[symbol];
+async function smartMoneyData(symbol,env,detail=false,institutionalSnap=[],issuerName="",secMap=null){
+  const map=secMap||await secTickers(env), cik=map[symbol];
   let insider={signal:"NEUTRAL",count:0,netValue:0,events:[],error:cik?null:"Ticker not found in SEC map"};
   if(cik) insider=await insiderData(symbol,cik,env,detail);
   const institutional=institutionalForName(issuerName||symbol,institutionalSnap,detail);
