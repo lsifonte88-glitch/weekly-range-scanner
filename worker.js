@@ -83,8 +83,9 @@ export default {
           for(const x of (stocks.data?.data||[])) names[String(x.symbol||"").toUpperCase()]=x.name||x.symbol;
         }catch(_){}
         const secMap = await secTickers(env);
-        const data = await Promise.all(symbols.map(s => smartMoneyData(s,env,detail,[],names[s]||s,secMap)));
-        return json({status:"ok",data,generatedAt:new Date().toISOString(),sources:{sec:true,twelveData:true,institutional13F:false,congress:Boolean(env.QUIVER_API_KEY||env.CONGRESS_API_URL),etf:Boolean(env.ETF_PROVIDER_URL||env.ETF_COMPOSITION_ENABLED==="true")}});
+        const institutionalSnap = await institutionalSnapshot(env);
+        const data = await Promise.all(symbols.map(s => smartMoneyData(s,env,detail,institutionalSnap,names[s]||s,secMap)));
+        return json({status:"ok",data,generatedAt:new Date().toISOString(),sources:{sec:true,twelveData:true,institutional13F:true,congress:Boolean(env.QUIVER_API_KEY||env.CONGRESS_API_URL),etf:Boolean(env.ETF_PROVIDER_URL||env.ETF_COMPOSITION_ENABLED==="true")}});
       }
 if (url.pathname === "/api") {
         const symbols = cleanSymbols(url.searchParams.get("symbols") || url.searchParams.get("symbol"));
