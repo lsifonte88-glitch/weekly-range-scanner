@@ -58,7 +58,7 @@ export default {
     if (request.method === "OPTIONS") return new Response(null, { headers: CORS });
     try {
       const url = new URL(request.url);
-      if (url.pathname === "/health") return json({ status: "ok", service: "Weekly Range Scanner PRO", time: new Date().toISOString() });
+      if (url.pathname === "/") {\n        const r = await fetch("https://raw.githubusercontent.com/lsifonte88-glitch/weekly-range-scanner/main/index.html", { cf: { cacheTtl: 60 } });\n        if (!r.ok) return new Response("No se pudo cargar la aplicación.", { status: 502 });\n        return new Response(await r.text(), { headers: { "content-type": "text/html; charset=UTF-8", "cache-control": "no-store" } });\n      }\n      if (url.pathname === "/smart-money.js") {\n        const r = await fetch("https://raw.githubusercontent.com/lsifonte88-glitch/weekly-range-scanner/main/smart-money.js", { cf: { cacheTtl: 60 } });\n        if (!r.ok) return new Response("No se pudo cargar Smart Money.", { status: 502 });\n        return new Response(await r.text(), { headers: { "content-type": "application/javascript; charset=UTF-8", "cache-control": "no-store" } });\n      }\n      if (url.pathname === "/health") return json({ status: "ok", service: "Weekly Range Scanner PRO", time: new Date().toISOString() });
       if (url.pathname === "/universe") {
         const symbols = await universe(env);
         return json({ status: "ok", count: symbols.length, symbols, generatedAt: new Date().toISOString() }, 200, { "cache-control": "public, max-age=21600" });
