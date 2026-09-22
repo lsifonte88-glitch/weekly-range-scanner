@@ -63,7 +63,15 @@ export default {
         const symbols = await universe(env);
         return json({ status: "ok", count: symbols.length, symbols, generatedAt: new Date().toISOString() }, 200, { "cache-control": "public, max-age=21600" });
       }
-      if (url.pathname === "/api") {
+            if (url.pathname === "/smart-money") {
+        const symbols = cleanSymbols(url.searchParams.get("symbols") || url.searchParams.get("symbol"));
+        if (!symbols.length) return json({status:"error",message:"Falta symbol o symbols."},400);
+        const detail = url.searchParams.get("detail")==="1";
+        const data=[];
+        for (const s of symbols) data.push(await smartMoneyData(s,env,detail));
+        return json({status:"ok",data,generatedAt:new Date().toISOString()});
+      }
+if (url.pathname === "/api") {
         const symbols = cleanSymbols(url.searchParams.get("symbols") || url.searchParams.get("symbol"));
         if (!symbols.length) return json({ status: "error", message: "Falta symbol o symbols." }, 400);
         const path = "/time_series?symbol=" + encodeURIComponent(symbols.join(",")) + "&interval=1day&outputsize=5000&order=desc&timezone=America/New_York";
@@ -79,3 +87,67 @@ export default {
     }
   }
 };
+
+const SEC = "https://data.sec.gov";
+const SEC_WWW = "https://www.sec.gov";
+
+async function secFetch(url, env) {
+  const ua = env.SEC_USER_AGENT || "WeeklyRangeScannerPRO/1.0 contact@example.com";
+  const r = await fetch(url, {headers:{accept:"application/json, application/xml, text/xml", "user-agent":ua}});
+  const text = await r.text();
+  return {status:r.status, text};
+}
+
+async function secTickers(env) {
+  const r = await secFetch(SEC+"/files/company_tickers.json", env);
+  if(r.status!==200) throw new Error("SEC ticker map HTTP "+r.status);
+  const j=JSON.parse(r.text), map={};
+  for(const k of Object.keys(j)){const x=j[k]; if(x?.ticker) map[String(x.ticker).toUpperCase()]=String(x.cik_str).padStart(10,"0");}
+  return map;
+}
+
+function xmlText(xml, tag){const m=xml.match(new RegExp("<"+tag+"[^>]*>([\\s\\S]*?)</"+tag+">","i"));return m?m[1].replace(/<[^>]+>/g,"").trim():"";}
+function xmlNum(xml, tag){const x=xmlText(xml,tag).replace(/[$,]/g,"");const n=Number(x);return Number.isFinite(n)?n:0;}
+function xmlDate(xml,tag){return xmlText(xml,tag).slice(0,10);}
+function insiderSignal(events){
+  const buys=events.filter(e=>e.action==="BUY"), sells=events.filter(e=>e.action==="SELL");
+  const buyValue=buys.reduce((s,e)=>s+(e.amount||0),0), sellValue=sells.reduce((s,e)=>s+(e.amount||0),0);
+  if(buyValue>sellValue*1.5 && buyValue>0)return {signal:"BUY",count:events.length,netValue:buyValue-sellValue};
+  if(sellValue>buyValue*1.5 && sellValue>0)return {signal:"SELL",count:events.length,netValue:buyValue-sellValue};
+  return {signal:"NEUTRAL",count:events.length,netValue:buyValue-sellValue};
+}
+async function insiderData(symbol,cik,env,detail=false){
+  const sub=await secFetch(SEC+"/submissions/CIK"+cik+".json",env);
+  if(sub.status!==200)return {signal:"NEUTRAL",count:0,netValue:0,events:[],error:"SEC submissions HTTP "+sub.status};
+  const j=JSON.parse(sub.text), r=j.filings?.recent||{}, events=[];
+  for(let i=0;i<(r.form||[]).length && events.length<12;i++){
+    if(!["4","3","5"].includes(r.form[i]))continue;
+    const accession=r.accessionNumber[i], primary=r.primaryDocument[i], filingDate=r.filingDate[i], reportDate=r.reportDate?.[i]||filingDate;
+    const url=SEC_WWW+"/Archives/edgar/data/"+String(Number(cik))+"/"+accession.replaceAll("-","")+"/"+primary;
+    const doc=await secFetch(url,env);
+    if(doc.status!==200)continue;
+    const xml=doc.text;
+    const names=[...xml.matchAll(/<issuerName[^>]*>([\s\S]*?)<\/issuerName>/gi)].map(m=>m[1].replace(/<[^>]+>/g,"").trim());
+    const rows=[...xml.matchAll(/<nonDerivativeTransaction>([\s\S]*?)<\/nonDerivativeTransaction>/gi)].map(m=>m[1]);
+    for(const row of rows.slice(0,6)){
+      const code=xmlText(row,"transactionCode").toUpperCase(), shares=xmlNum(row,"transactionShares"), price=xmlNum(row,"transactionPricePerShare");
+      let action=code==="P"?"BUY":code==="S"?"SELL":"OTHER";
+      if(action==="OTHER")continue;
+      events.push({source:"SEC Form "+r.form[i],date:reportDate,type:"INSIDER",actor:names[0]||symbol,action,shares,amount:shares*price,value:shares&&price?("$"+(shares*price).toFixed(0)):"",filingDate,url});
+    }
+  }
+  const s=insiderSignal(events);
+  return {...s,events:detail?events:[]};
+}
+async function smartMoneyData(symbol,env,detail=false){
+  const map=await secTickers(env), cik=map[symbol];
+  let insider={signal:"NEUTRAL",count:0,netValue:0,events:[],error:cik?null:"Ticker not found in SEC map"};
+  if(cik) insider=await insiderData(symbol,cik,env,detail);
+  const institutional={signal:"NEUTRAL",filers:0,events:[],note:"13F is quarterly; ticker-level aggregation requires a holdings dataset/provider."};
+  const congress={signal:"NEUTRAL",count:0,events:[],note:env.CONGRESS_API_URL?"Provider configured but adapter not enabled yet.":"No congressional data provider configured."};
+  const technical={signal:"NEUTRAL"};
+  let score=50;
+  score += insider.signal==="BUY"?20:insider.signal==="SELL"?-20:0;
+  const quality=cik?"SEC insider data available":"SEC ticker mapping unavailable";
+  return {symbol,score,insider,institutional,congress,technical,dataQuality:quality,asOf:new Date().toISOString(),events:detail?[...(insider.events||[])]:[]};
+}
