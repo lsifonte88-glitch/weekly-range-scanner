@@ -231,24 +231,7 @@ function institutionalForName(name,snap,detail=false){
   return {signal:events.length?"HOLDING":"NEUTRAL",filers:new Set(events.map(e=>e.actor)).size,value,events:detail?events.slice(0,20):[],note:events.length?"Latest SEC 13F holdings; quarterly and not real-time.":"No matching 13F holding found in the configured manager sample."};
 }
 
-async function optionsFlowData(symbol, env){
-  const url=env.OPTIONS_FLOW_URL;
-  if(!url)return {enabled:false,signal:"OFF",callPutRatio:null,callVolume:0,putVolume:0,openInterestChange:null,note:"OPTIONS_FLOW_URL no configurado."};
-  try{
-    const u=new URL(url);
-    u.searchParams.set("symbol",symbol);
-    const r=await fetch(u.toString(),{headers:env.OPTIONS_FLOW_API_KEY?{"Authorization":"Bearer "+env.OPTIONS_FLOW_API_KEY}:{}});
-    if(!r.ok)throw Error("provider "+r.status);
-    const j=await r.json();
-    const callVolume=Number(j.callVolume??j.callsVolume??0),putVolume=Number(j.putVolume??j.putsVolume??0);
-    const ratio=putVolume>0?callVolume/putVolume:null;
-    const oi=Number(j.openInterestChange??j.oiChange??NaN);
-    let signal="NEUTRAL";
-    if(ratio!=null&&ratio>=1.5)signal="CALL_HEAVY";
-    else if(ratio!=null&&ratio<=0.67)signal="PUT_HEAVY";
-    return {enabled:true,signal,callPutRatio:ratio,callVolume,putVolume,openInterestChange:Number.isFinite(oi)?oi:null,asOf:j.asOf||j.timestamp||new Date().toISOString(),note:j.note||"Fuente externa de opciones."};
-  }catch(e){return {enabled:true,signal:"ERROR",callPutRatio:null,callVolume:0,putVolume:0,openInterestChange:null,note:"Error proveedor: "+e.message};}
-}
+async function optionsFlowData(symbol,env){try{const ex=await td('/options/expiration?symbol='+encodeURIComponent(symbol),env);const dates=ex.data?.dates||ex.data?.values||ex.data?.data||[];const expiration=dates.map(x=>typeof x==='string'?x:(x.expiration_date||x.date||x.expiration)).filter(Boolean).sort()[0];if(!expiration)return {enabled:false,signal:'OFF',note:ex.data?.message||'Sin expiración de opciones disponible.'};const r=await td('/options/chain?symbol='+encodeURIComponent(symbol)+'&expiration_date='+encodeURIComponent(expiration),env);const raw=r.data?.options||r.data?.data||r.data?.values||r.data?.result||[];const rows=Array.isArray(raw)?raw:(raw&&typeof raw==='object'?Object.values(raw).flat():[]);let callVolume=0,putVolume=0,callOI=0,putOI=0;for(const x of rows){const side=String(x.side||x.type||x.option_type||x.contract_type||'').toUpperCase(),vol=Number(x.volume??x.trade_volume??0)||0,oi=Number(x.open_interest??x.openInterest??x.oi??0)||0;if(side.includes('CALL')){callVolume+=vol;callOI+=oi}if(side.includes('PUT')){putVolume+=vol;putOI+=oi}}const ratio=putVolume?callVolume/putVolume:null,oiRatio=putOI?callOI/putOI:null;let signal='NEUTRAL';if(ratio!=null&&ratio>=1.5&&oiRatio!=null&&oiRatio>=1)signal='CALL_HEAVY';else if(ratio!=null&&ratio<=.67&&oiRatio!=null&&oiRatio<=1)signal='PUT_HEAVY';else if(ratio!=null&&ratio>=1.75)signal='CALL_HEAVY';else if(ratio!=null&&ratio<=.57)signal='PUT_HEAVY';return {enabled:true,signal,expiration,callVolume,putVolume,callOpenInterest:callOI,putOpenInterest:putOI,callPutRatio:ratio,callPutOIRatio:oiRatio,note:'Twelve Data options chain',asOf:new Date().toISOString()}}catch(e){return {enabled:false,signal:'ERROR',note:'Opciones no disponibles: '+e.message}}}
 
 function unusualSignal(v){
   const a=(v||[]).slice(-25); if(a.length<8)return {signal:"NEUTRAL",score:0,rvol:0,priceChange:0,volumeChange:0,reason:"Insufficient history"};
@@ -317,7 +300,7 @@ async function smartMoneyData(symbol,env,detail=false,institutionalSnap=[],issue
   if(cik) insider=await insiderData(symbol,cik,env,detail);
   const institutional=institutionalForName(issuerName||symbol,institutionalSnap,detail);
   const congress=await congressData(symbol,env,detail);
-  const unusual=await unusualData(symbol,env);
+  const unusual=await unusualData(symbol,env); const options=await optionsFlowData(symbol,env);
   const isEtf=Boolean(issuerName && /ETF|TRUST|FUND/i.test(issuerName)) || /^(SPY|QQQ|QQQM|IWM|DIA|XLF|XLK|VOO|VTI|SMH|SOXX|ARKK|TQQQ|SQQQ|SOXL|SOXS)$/i.test(symbol);
   const etf=isEtf?await etfData(symbol,env,detail):{signal:"N/A",holdings:[],note:"No es ETF o no aplica."};
   const technical={signal:unusual.signal==="UNUSUAL_UP"?"BULLISH_ACTIVITY":unusual.signal==="UNUSUAL_DOWN"?"BEARISH_ACTIVITY":"NEUTRAL"};
@@ -325,8 +308,8 @@ async function smartMoneyData(symbol,env,detail=false,institutionalSnap=[],issue
   score += insider.signal==="BUY"?20:insider.signal==="SELL"?-20:0;
   score += institutional.signal==="HOLDING"?5:0;
   score += congress.signal==="BUY"?5:congress.signal==="SELL"?-5:0;
-  score += unusual.score>0?Math.min(15,Math.round(unusual.score/3)):Math.max(-15,Math.round(unusual.score/3));
+  score += unusual.score>0?Math.min(15,Math.round(unusual.score/3)):Math.max(-15,Math.round(unusual.score/3)); score += options.signal==="CALL_HEAVY"?10:options.signal==="PUT_HEAVY"?-10:0;
   score=Math.max(0,Math.min(100,Math.round(score)));
   const quality=[cik?"SEC insider":"sin SEC insider",institutional.filers?institutional.filers+" institucionales":"sin match 13F",congress.count?congress.count+" Congreso":"sin Congreso",unusual.error?"sin unusual":"unusual OK"].join(" · ");
-  return {symbol,score,insider,institutional,congress,unusual,etf,technical,dataQuality:quality,asOf:new Date().toISOString(),events:detail?[...(insider.events||[]),...(institutional.events||[]),...(congress.events||[])]:[]};
+  return {symbol,score,insider,institutional,congress,unusual,options,etf,technical,dataQuality:quality,asOf:new Date().toISOString(),events:detail?[...(insider.events||[]),...(institutional.events||[]),...(congress.events||[])]:[]};
 }
