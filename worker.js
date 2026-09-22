@@ -73,7 +73,7 @@ export default {
         const symbols = await universe(env);
         return json({ status: "ok", count: symbols.length, symbols, generatedAt: new Date().toISOString() }, 200, { "cache-control": "public, max-age=21600" });
       }
-            if (url.pathname === "/smart-money") {
+      if (url.pathname === "/smart-money") {
         const symbols = cleanSymbols(url.searchParams.get("symbols") || url.searchParams.get("symbol"));
         if (!symbols.length) return json({status:"error",message:"Falta symbol o symbols."},400);
         const detail = url.searchParams.get("detail")==="1";
@@ -81,12 +81,10 @@ export default {
         try{
           const stocks=await td("/stocks?country=United%20States",env);
           for(const x of (stocks.data?.data||[])) names[String(x.symbol||"").toUpperCase()]=x.name||x.symbol;
-          const etfs=await td("/etfs/list?country=United%20States&outputsize=1000",env);
-          for(const x of (etfs.data?.result?.list||[])) names[String(x.symbol||"").toUpperCase()]=x.name||x.symbol;
         }catch(_){}
-        const [institutionalSnap, secMap] = await Promise.all([institutionalSnapshot(env), secTickers(env)]);
-        const data = await Promise.all(symbols.map(s => smartMoneyData(s,env,detail,institutionalSnap,names[s]||s,secMap)));
-        return json({status:"ok",data,generatedAt:new Date().toISOString(),sources:{sec:true,twelveData:true,congress:Boolean(env.QUIVER_API_KEY||env.CONGRESS_API_URL),etf:Boolean(env.ETF_PROVIDER_URL||env.ETF_COMPOSITION_ENABLED==="true")}});
+        const secMap = await secTickers(env);
+        const data = await Promise.all(symbols.map(s => smartMoneyData(s,env,detail,[],names[s]||s,secMap)));
+        return json({status:"ok",data,generatedAt:new Date().toISOString(),sources:{sec:true,twelveData:true,institutional13F:false,congress:Boolean(env.QUIVER_API_KEY||env.CONGRESS_API_URL),etf:Boolean(env.ETF_PROVIDER_URL||env.ETF_COMPOSITION_ENABLED==="true")}});
       }
 if (url.pathname === "/api") {
         const symbols = cleanSymbols(url.searchParams.get("symbols") || url.searchParams.get("symbol"));
@@ -137,7 +135,7 @@ async function insiderData(symbol,cik,env,detail=false){
   const sub=await secFetch(SEC+"/submissions/CIK"+cik+".json",env);
   if(sub.status!==200)return {signal:"NEUTRAL",count:0,netValue:0,events:[],error:"SEC submissions HTTP "+sub.status};
   const j=JSON.parse(sub.text), r=j.filings?.recent||{}, events=[];
-  for(let i=0;i<(r.form||[]).length && events.length<12;i++){
+  for(let i=0;i<(r.form||[]).length && events.length<12 && i<6;i++){
     if(!["4","3","5"].includes(r.form[i]))continue;
     const accession=r.accessionNumber[i], primary=r.primaryDocument[i], filingDate=r.filingDate[i], reportDate=r.reportDate?.[i]||filingDate;
     const url=SEC_WWW+"/Archives/edgar/data/"+String(Number(cik))+"/"+accession.replaceAll("-","")+"/"+primary;
