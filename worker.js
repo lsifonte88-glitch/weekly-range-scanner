@@ -151,7 +151,7 @@ async function insiderData(symbol,cik,env,detail=false){
 
 const INSTITUTIONAL_MANAGERS = [
   {cik:"0001067983",name:"Berkshire Hathaway"},
-  {cik:"0000003751",name:"State Street"} // kept as fallback identifier; SEC submissions are validated before use
+  {cik:"0000093751",name:"State Street"} // kept as fallback identifier; SEC submissions are validated before use
 ];
 
 function normName(s){
