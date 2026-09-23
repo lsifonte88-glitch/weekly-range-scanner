@@ -79,6 +79,31 @@ async function yahooTimeSeries(symbols) {
   return out;
 }
 
+async function stooqOne(symbol) {
+  try {
+    const s=String(symbol).toLowerCase().replace(/\./g,'-')+'.us';
+    const url='https://stooq.com/q/d/l/?s='+encodeURIComponent(s)+'&i=d&d1='+new Date(Date.now()-370*86400000).toISOString().slice(0,10)+'&d2='+new Date().toISOString().slice(0,10);
+    const r=await fetch(url,{headers:{accept:'text/csv'}});
+    if(!r.ok)return {symbol,values:[]};
+    const text=await r.text();
+    const lines=text.trim().split(/\r?\n/);
+    if(lines.length<2)return {symbol,values:[]};
+    const values=lines.slice(1).map(line=>{
+      const p=line.split(',');
+      return {datetime:p[0],open:Number(p[1])||0,high:Number(p[2])||0,low:Number(p[3])||0,close:Number(p[4])||0,volume:Number(p[5])||0};
+    }).filter(x=>x.close>0);
+    return {symbol,values};
+  }catch(_){return {symbol,values:[]}}
+}
+async function stooqTimeSeries(symbols){
+  const out={};
+  for(let i=0;i<symbols.length;i+=12){
+    const results=await Promise.all(symbols.slice(i,i+12).map(stooqOne));
+    for(const r of results)out[r.symbol]=r.values;
+  }
+  return out;
+}
+
 
 async function marketMovers(env, market, direction) {
   const r = await td("/market_movers/" + market + "?direction=" + direction + "&outputsize=50&country=USA", env);
@@ -102,7 +127,7 @@ export default {
     try {
       const url = new URL(request.url);
       if (url.pathname === "/") {
-        const r = await fetch("https://raw.githubusercontent.com/lsifonte88-glitch/weekly-range-scanner/main/index.html?v=20260922-7", { cf: { cacheTtl: 0 } });
+        const r = await fetch("https://raw.githubusercontent.com/lsifonte88-glitch/weekly-range-scanner/main/index.html?v=20260922-8", { cf: { cacheTtl: 0 } });
         if (!r.ok) return new Response("No se pudo cargar la aplicación.", { status: 502 });
         return new Response(await r.text(), { headers: { "content-type": "text/html; charset=UTF-8", "cache-control": "no-store" } });
       }
@@ -162,10 +187,16 @@ if (url.pathname === "/api") {
         // Twelve Data Basic only allows 8 API credits/minute. If that limit is hit,
         // automatically use Yahoo Finance chart data so the Scanner does not stall.
         if (result.httpStatus === 429) {
-          const data = await yahooTimeSeries(symbols);
-          const usable = Object.values(data).some(v => Array.isArray(v) && v.length);
+          let data = await yahooTimeSeries(symbols);
+          let usable = Object.values(data).some(v => Array.isArray(v) && v.length);
           if (usable) {
             return json({ status: "ok", data, fetchedAt: new Date().toISOString(), source: "Yahoo Finance fallback", warning: "Twelve Data rate limit reached; Scanner continued with fallback data." },
+              200, { "cache-control": "public, max-age=300" });
+          }
+          data = await stooqTimeSeries(symbols);
+          usable = Object.values(data).some(v => Array.isArray(v) && v.length);
+          if (usable) {
+            return json({ status: "ok", data, fetchedAt: new Date().toISOString(), source: "Stooq fallback", warning: "Twelve Data and Yahoo Finance were unavailable; Scanner continued with Stooq data." },
               200, { "cache-control": "public, max-age=300" });
           }
         }
