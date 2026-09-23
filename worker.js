@@ -66,7 +66,7 @@ export default {
     try {
       const url = new URL(request.url);
       if (url.pathname === "/") {
-        const r = await fetch("https://raw.githubusercontent.com/lsifonte88-glitch/weekly-range-scanner/main/index.html?v=20260922-4", { cf: { cacheTtl: 0 } });
+        const r = await fetch("https://raw.githubusercontent.com/lsifonte88-glitch/weekly-range-scanner/main/index.html?v=20260922-5", { cf: { cacheTtl: 0 } });
         if (!r.ok) return new Response("No se pudo cargar la aplicación.", { status: 502 });
         return new Response(await r.text(), { headers: { "content-type": "text/html; charset=UTF-8", "cache-control": "no-store" } });
       }
@@ -90,16 +90,27 @@ export default {
           message:"El prefiltro inteligente usa /market_movers de Twelve Data y requiere un plan que tenga ese endpoint habilitado. " + (bad.message||""),
           fallback:"Usa ANALIZAR UNIVERSO para el escaneo completo o aumenta la cuota de Twelve Data."
         }, bad.status === 429 ? 429 : 402);
-        const symbols = [...new Set(cached.flatMap(x => x.values).map(x => String(x.symbol||"").toUpperCase())
+        let symbols = [...new Set(cached.flatMap(x => x.values).map(x => String(x.symbol||"").toUpperCase())
           .filter(Boolean).filter(x => x !== "MSFT").filter(x => /^[A-Z0-9.-]+$/.test(x)))];
+        // After the regular session Twelve Data can return an empty movers snapshot.
+        // In that case use the first liquid slice of the cached US universe as a safe
+        // fallback; every symbol still passes the full Scanner filters before ranking.
+        let source="Twelve Data market_movers";
+        let note="Prefiltro: mayores ganadores/perdedores del día.";
+        if(!symbols.length){
+          const all=await universe(env);
+          symbols=all.slice(0,240);
+          source="universe-fallback";
+          note="Market movers sin datos (habitual fuera de sesión). Se usa un fallback de 240 símbolos y se aplican TODOS los filtros del Scanner.";
+        }
         return json({
           status:"ok",
           count:symbols.length,
           symbols,
           generatedAt:new Date().toISOString(),
-          source:"Twelve Data market_movers",
-          note:"Prefiltro: mayores ganadores/perdedores de acciones y ETFs. Los candidatos se vuelven a pasar por TODOS los filtros del Scanner antes de aparecer en Ranking."
-        },200,{"cache-control":"public, max-age=300"});
+          source,
+          note
+        },200,{"cache-control":"public, max-age":300});
       }
 \n      if (url.pathname === "/universe") {
         const symbols = await universe(env);
