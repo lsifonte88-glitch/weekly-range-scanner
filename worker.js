@@ -189,48 +189,74 @@ if (url.pathname === "/api") {
         const symbols = cleanSymbols(url.searchParams.get("symbols") || url.searchParams.get("symbol"));
         if (!symbols.length) return json({ status: "error", message: "Falta symbol o symbols." }, 400);
 
-        // Recuperamos datos por capas y, sobre todo, NO descartamos el lote entero
-        // si un proveedor solo devuelve una parte de los símbolos.
-        let data = await yahooTimeSeries(symbols);
-        let missing = symbols.filter(s => !Array.isArray(data[s]) || data[s].length < 60);
+        // Recuperación por símbolo: evita que un lote parcialmente bloqueado deje al
+        // frontend sin datos aunque uno de los proveedores sí entregue históricos.
+        const data = {};
+        const providers = {};
+        const pending = [...symbols];
 
-        // Stooq completa los símbolos que Yahoo no pudo entregar.
-        if (missing.length) {
-          const stooq = await stooqTimeSeries(missing);
-          for (const s of missing) {
-            if (Array.isArray(stooq[s]) && stooq[s].length) data[s] = stooq[s];
+        const stooq = await stooqTimeSeries(pending);
+        for (const s of pending) {
+          if (Array.isArray(stooq[s]) && stooq[s].length >= 60) {
+            data[s] = stooq[s];
+            providers[s] = "Stooq";
           }
         }
 
-        missing = symbols.filter(s => !Array.isArray(data[s]) || data[s].length < 60);
-
-        // Twelve Data completa únicamente los faltantes, reduciendo consumo.
-        let result = null;
+        let missing = symbols.filter(s => !data[s]);
         if (missing.length) {
-          const path = "/time_series?symbol=" + encodeURIComponent(missing.join(",")) +
-            "&interval=1day&outputsize=260&order=desc&timezone=America/New_York";
-          result = await td(path, env);
-          if (result.httpStatus === 200 && result.data?.status !== "error") {
-            const tdData = normalizeBatch(missing, result.data);
-            for (const s of missing) {
-              if (Array.isArray(tdData[s]?.values) && tdData[s].values.length) data[s] = tdData[s].values;
-              else if (Array.isArray(tdData[s])) data[s] = tdData[s];
+          const yahoo = await yahooTimeSeries(missing);
+          for (const s of missing) {
+            if (Array.isArray(yahoo[s]) && yahoo[s].length >= 60) {
+              data[s] = yahoo[s];
+              providers[s] = "Yahoo Finance";
             }
           }
         }
 
-        const usable = Object.values(data).some(v => Array.isArray(v) && v.length >= 60);
-        if (usable) {
-          const sources = [];
-          if (symbols.some(s => Array.isArray(data[s]) && data[s].length && !missing.includes(s))) sources.push("Yahoo Finance");
-          return json({ status: "ok", data, fetchedAt: new Date().toISOString(),
-            source: sources.length ? sources.join(" + fallbacks") : "Yahoo/Stooq/Twelve Data" },
-            200, { "cache-control": "public, max-age=300" });
+        missing = symbols.filter(s => !data[s]);
+        if (missing.length) {
+          for (let i = 0; i < missing.length; i += 6) {
+            const chunk = missing.slice(i, i + 6);
+            try {
+              const path = "/time_series?symbol=" + encodeURIComponent(chunk.join(",")) +
+                "&interval=1day&outputsize=260&order=desc&timezone=America/New_York";
+              const result = await td(path, env);
+              if (result.httpStatus === 200 && result.data?.status !== "error") {
+                const tdData = normalizeBatch(chunk, result.data);
+                for (const s of chunk) {
+                  const v = Array.isArray(tdData[s]?.values) ? tdData[s].values :
+                    Array.isArray(tdData[s]) ? tdData[s] : [];
+                  if (v.length >= 60) {
+                    data[s] = v;
+                    providers[s] = "Twelve Data";
+                  }
+                }
+              }
+            } catch (_) {}
+          }
         }
 
-        return json({ status: "error",
-          message: "No se pudieron obtener suficientes datos históricos para los símbolos solicitados.",
-          details: result?.data || null }, 502);
+        const usable = symbols.filter(s => Array.isArray(data[s]) && data[s].length >= 60);
+        if (usable.length) {
+          const counts = {};
+          for (const s of usable) counts[providers[s]] = (counts[providers[s]] || 0) + 1;
+          return json({
+            status: "ok",
+            data,
+            fetchedAt: new Date().toISOString(),
+            source: Object.entries(counts).map(([k,v]) => k + ": " + v).join(" + "),
+            usable: usable.length,
+            requested: symbols.length
+          }, 200, { "cache-control": "no-store" });
+        }
+
+        return json({
+          status: "error",
+          message: "No se pudieron obtener datos históricos de ningún proveedor.",
+          requested: symbols.length,
+          providersTried: ["Stooq", "Yahoo Finance", "Twelve Data"]
+        }, 502);
       }
       return json({ status: "ok", service: "Weekly Range Scanner PRO", endpoints: ["/health", "/universe", "/api?symbol=NVDA", "/api?symbols=NVDA,META,AMZN"] });
     } catch (error) {
