@@ -33,7 +33,7 @@ async function td(path, env) {
 }
 
 function cleanSymbols(value) {
-  return [...new Set(String(value || "").split(",").map(x => x.trim().toUpperCase()).filter(Boolean).filter(x => x !== "MSFT").filter(x => /^[A-Z0-9.-]+$/.test(x)))].slice(0, 8);
+  return [...new Set(String(value || "").split(",").map(x => x.trim().toUpperCase()).filter(Boolean).filter(x => x !== "MSFT").filter(x => /^[A-Z0-9.-]+$/.test(x)))].slice(0, 120);
 }
 
 function normalizeBatch(symbols, raw) {
@@ -90,12 +90,12 @@ export default {
 if (url.pathname === "/api") {
         const symbols = cleanSymbols(url.searchParams.get("symbols") || url.searchParams.get("symbol"));
         if (!symbols.length) return json({ status: "error", message: "Falta symbol o symbols." }, 400);
-        const path = "/time_series?symbol=" + encodeURIComponent(symbols.join(",")) + "&interval=1day&outputsize=5000&order=desc&timezone=America/New_York";
+        const path = "/time_series?symbol=" + encodeURIComponent(symbols.join(",")) + "&interval=1day&outputsize=260&order=desc&timezone=America/New_York";
         const result = await td(path, env);
         if (result.httpStatus !== 200) return json({ status: "error", message: result.data?.message || "Error de Twelve Data.", details: result.data }, result.httpStatus);
         if (result.data?.status === "error") return json(result.data, 400);
         const data = normalizeBatch(symbols, result.data);
-        return json({ status: "ok", data, fetchedAt: new Date().toISOString(), creditsUsed: result.creditsUsed, creditsLeft: result.creditsLeft }, 200, { "api-credits-used": result.creditsUsed || "", "api-credits-left": result.creditsLeft || "" });
+        return json({ status: "ok", data, fetchedAt: new Date().toISOString(), creditsUsed: result.creditsUsed, creditsLeft: result.creditsLeft }, 200, { "api-credits-used": result.creditsUsed || "", "api-credits-left": result.creditsLeft || "", "cache-control": "public, max-age=300" });
       }
       return json({ status: "ok", service: "Weekly Range Scanner PRO", endpoints: ["/health", "/universe", "/api?symbol=NVDA", "/api?symbols=NVDA,META,AMZN"] });
     } catch (error) {
