@@ -66,7 +66,7 @@ export default {
     try {
       const url = new URL(request.url);
       if (url.pathname === "/") {
-        const r = await fetch("https://raw.githubusercontent.com/lsifonte88-glitch/weekly-range-scanner/main/index.html?v=20260922-5", { cf: { cacheTtl: 0 } });
+        const r = await fetch("https://raw.githubusercontent.com/lsifonte88-glitch/weekly-range-scanner/main/index.html?v=20260922-6", { cf: { cacheTtl: 0 } });
         if (!r.ok) return new Response("No se pudo cargar la aplicación.", { status: 502 });
         return new Response(await r.text(), { headers: { "content-type": "text/html; charset=UTF-8", "cache-control": "no-store" } });
       }
@@ -83,36 +83,16 @@ export default {
           marketMovers(env, "etf", "gainers"),
           marketMovers(env, "etf", "losers")
         ]);
-        const bad = cached.find(x => !x.ok);
-        if (bad) return json({
-          status:"error",
-          code: bad.status || 400,
-          message:"El prefiltro inteligente usa /market_movers de Twelve Data y requiere un plan que tenga ese endpoint habilitado. " + (bad.message||""),
-          fallback:"Usa ANALIZAR UNIVERSO para el escaneo completo o aumenta la cuota de Twelve Data."
-        }, bad.status === 429 ? 429 : 402);
-        let symbols = [...new Set(cached.flatMap(x => x.values).map(x => String(x.symbol||"").toUpperCase())
+        const symbols = [...new Set(cached.filter(x => x.ok).flatMap(x => x.values).map(x => String(x.symbol||"").toUpperCase())
           .filter(Boolean).filter(x => x !== "MSFT").filter(x => /^[A-Z0-9.-]+$/.test(x)))];
-        // After the regular session Twelve Data can return an empty movers snapshot.
-        // In that case use the first liquid slice of the cached US universe as a safe
-        // fallback; every symbol still passes the full Scanner filters before ranking.
-        let source="Twelve Data market_movers";
-        let note="Prefiltro: mayores ganadores/perdedores del día.";
-        if(!symbols.length){
-          const all=await universe(env);
-          symbols=all.slice(0,240);
-          source="universe-fallback";
-          note="Market movers sin datos (habitual fuera de sesión). Se usa un fallback de 240 símbolos y se aplican TODOS los filtros del Scanner.";
+        if(symbols.length){
+          return json({status:"ok",count:symbols.length,symbols,generatedAt:new Date().toISOString(),source:"Twelve Data market_movers",note:"Prefiltro: mayores ganadores/perdedores del día."},200,{"cache-control":"no-store"});
         }
-        return json({
-          status:"ok",
-          count:symbols.length,
-          symbols,
-          generatedAt:new Date().toISOString(),
-          source,
-          note
-        },200,{"cache-control":"public, max-age":300});
+        const all=await universe(env);
+        if(!all.length) return json({status:"error",message:"Twelve Data no devolvió market movers ni un universo válido."},502);
+        return json({status:"ok",count:all.length,symbols:all,generatedAt:new Date().toISOString(),source:"universe-fallback",note:"Market movers sin datos o no disponibles. Se usa el universo completo y se aplican TODOS los filtros del Scanner."},200,{"cache-control":"no-store"});
       }
-\n      if (url.pathname === "/universe") {
+      if (url.pathname === "/universe") {
         const symbols = await universe(env);
         return json({ status: "ok", count: symbols.length, symbols, generatedAt: new Date().toISOString() }, 200, { "cache-control": "public, max-age=21600" });
       }
