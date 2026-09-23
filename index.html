@@ -34,8 +34,16 @@ async function smartScanUniverse(){
     if(!r.ok)throw Error('HTTP '+r.status);
     const d=await r.json();
     if(d.status!=='ok')throw Error(d.message||'Prefiltro no disponible');
-    const ss=[...new Set(d.symbols||[])];
-    if(!ss.length)throw Error('No se encontraron candidatos en el prefiltro.');
+    let ss=[...new Set(d.symbols||[])];
+    if(!ss.length){
+      document.getElementById('status').textContent='Prefiltro sin datos. Cargando universo para aplicar los filtros completos...';
+      const ur=await fetch(WORKER+'/universe',{cache:'no-store'});
+      if(!ur.ok)throw Error('Prefiltro vacío y no se pudo cargar el universo. HTTP '+ur.status);
+      const ud=await ur.json();
+      ss=[...new Set(ud.symbols||[])];
+      if(!ss.length)throw Error('El universo de Twelve Data está vacío.');
+      document.getElementById('status').textContent='Prefiltro sin datos · usando universo completo y aplicando TODOS los filtros del Scanner.';
+    }
     let a=[],bs=[]; for(let i=0;i<ss.length;i+=BATCH_SIZE)bs.push(ss.slice(i,i+BATCH_SIZE));
     for(let i=0;i<bs.length;i++){
       document.getElementById('status').textContent='SCAN INTELIGENTE · análisis completo '+(i+1)+'/'+bs.length;
