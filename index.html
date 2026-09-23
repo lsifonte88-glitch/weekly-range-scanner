@@ -18,8 +18,8 @@ async function fetchBatch(ss){
   const d=await r.json();
   if(d.status!=='ok')throw Error(d.message||'Error API');
   CACHE.set(key,d);
-  if(d.source==='Yahoo Finance fallback'){
-    document.getElementById('status').textContent='Twelve Data limitado · usando datos alternativos automáticamente.';
+  if(d.source && d.source!=='Twelve Data'){
+    document.getElementById('status').textContent='Twelve Data limitado · usando '+d.source+' automáticamente.';
   }
   return d;
 }
