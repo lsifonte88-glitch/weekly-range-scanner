@@ -50,7 +50,7 @@ async function yahooOne(symbol) {
   for (const host of hosts) {
     try {
       const url = "https://" + host + "/v8/finance/chart/" + encodeURIComponent(symbol) +
-        "?period1=" + period1 + "&period2=" + now + "&interval=1d&events=history&includeAdjustedClose=true";
+        "?range=1y&interval=1d&events=history&includeAdjustedClose=true&includePrePost=false";
       const r = await fetch(url, { headers: { accept: "application/json", "user-agent": "Mozilla/5.0" } });
       if (!r.ok) continue;
       const j = await r.json();
