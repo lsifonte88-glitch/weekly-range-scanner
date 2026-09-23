@@ -43,7 +43,14 @@ function normalizeBatch(symbols, raw) {
   return out;
 }
 
-async function universe(env) {
+
+async function marketMovers(env, market, direction) {
+  const r = await td("/market_movers/" + market + "?direction=" + direction + "&outputsize=50&country=USA", env);
+  if (r.httpStatus !== 200) return { ok:false, status:r.httpStatus, message:r.data?.message || "Market movers no disponible." };
+  const values = Array.isArray(r.data?.values) ? r.data.values : [];
+  return { ok:true, values };
+}
+\nasync function universe(env) {
   const [stocks, etfs] = await Promise.all([td("/stocks?country=United%20States", env), td("/etf", env)]);
   let stockList = Array.isArray(stocks.data?.data) ? stocks.data.data : [];
   let etfList = Array.isArray(etfs.data?.data) ? etfs.data.data : [];
@@ -59,7 +66,7 @@ export default {
     try {
       const url = new URL(request.url);
       if (url.pathname === "/") {
-        const r = await fetch("https://raw.githubusercontent.com/lsifonte88-glitch/weekly-range-scanner/main/index.html?v=20260922-3", { cf: { cacheTtl: 0 } });
+        const r = await fetch("https://raw.githubusercontent.com/lsifonte88-glitch/weekly-range-scanner/main/index.html?v=20260922-4", { cf: { cacheTtl: 0 } });
         if (!r.ok) return new Response("No se pudo cargar la aplicación.", { status: 502 });
         return new Response(await r.text(), { headers: { "content-type": "text/html; charset=UTF-8", "cache-control": "no-store" } });
       }
@@ -69,7 +76,32 @@ export default {
         return new Response(await r.text(), { headers: { "content-type": "application/javascript; charset=UTF-8", "cache-control": "no-store" } });
       }
       if (url.pathname === "/health") return json({ status: "ok", service: "Weekly Range Scanner PRO", time: new Date().toISOString() });
-      if (url.pathname === "/universe") {
+      if (url.pathname === "/prefilter") {
+        const cached = await Promise.all([
+          marketMovers(env, "stocks", "gainers"),
+          marketMovers(env, "stocks", "losers"),
+          marketMovers(env, "etf", "gainers"),
+          marketMovers(env, "etf", "losers")
+        ]);
+        const bad = cached.find(x => !x.ok);
+        if (bad) return json({
+          status:"error",
+          code: bad.status || 400,
+          message:"El prefiltro inteligente usa /market_movers de Twelve Data y requiere un plan que tenga ese endpoint habilitado. " + (bad.message||""),
+          fallback:"Usa ANALIZAR UNIVERSO para el escaneo completo o aumenta la cuota de Twelve Data."
+        }, bad.status === 429 ? 429 : 402);
+        const symbols = [...new Set(cached.flatMap(x => x.values).map(x => String(x.symbol||"").toUpperCase())
+          .filter(Boolean).filter(x => x !== "MSFT").filter(x => /^[A-Z0-9.-]+$/.test(x)))];
+        return json({
+          status:"ok",
+          count:symbols.length,
+          symbols,
+          generatedAt:new Date().toISOString(),
+          source:"Twelve Data market_movers",
+          note:"Prefiltro: mayores ganadores/perdedores de acciones y ETFs. Los candidatos se vuelven a pasar por TODOS los filtros del Scanner antes de aparecer en Ranking."
+        },200,{"cache-control":"public, max-age=300"});
+      }
+\n      if (url.pathname === "/universe") {
         const symbols = await universe(env);
         return json({ status: "ok", count: symbols.length, symbols, generatedAt: new Date().toISOString() }, 200, { "cache-control": "public, max-age=21600" });
       }
