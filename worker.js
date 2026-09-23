@@ -97,7 +97,7 @@ async function stooqOne(symbol) {
 }
 async function stooqTimeSeries(symbols){
   const out={};
-  for(let i=0;i<symbols.length;i+=12){
+  for(let i=0;i<symbols.length;i+=6){
     const results=await Promise.all(symbols.slice(i,i+12).map(stooqOne));
     for(const r of results)out[r.symbol]=r.values;
   }
@@ -186,7 +186,7 @@ if (url.pathname === "/api") {
 
         // Twelve Data Basic only allows 8 API credits/minute. If that limit is hit,
         // automatically use Yahoo Finance chart data so the Scanner does not stall.
-        if (result.httpStatus === 429) {
+        if (result.httpStatus !== 200 || result.data?.status === "error") {
           let data = await yahooTimeSeries(symbols);
           let usable = Object.values(data).some(v => Array.isArray(v) && v.length);
           if (usable) {
