@@ -258,7 +258,7 @@ if (url.pathname === "/api") {
           providersTried: ["Stooq", "Yahoo Finance", "Twelve Data"]
         }, 502);
       }
-      return json({ status: "ok", service: "Weekly Range Scanner PRO", endpoints: ["/health", "/universe", "/api?symbol=NVDA", "/api?symbols=NVDA,META,AMZN"] });
+      return json({ status: "ok", service: "Weekly Range Scanner PRO", build: "20260922-datafix2", endpoints: ["/health", "/universe", "/api?symbol=NVDA", "/api?symbols=NVDA,META,AMZN"] });
     } catch (error) {
       return json({ status: "error", message: error?.message || String(error) }, 500);
     }
