@@ -43,6 +43,42 @@ function normalizeBatch(symbols, raw) {
   return out;
 }
 
+async function yahooOne(symbol) {
+  try {
+    const now = Math.floor(Date.now()/1000);
+    const period1 = now - 370 * 86400;
+    const url = "https://query1.finance.yahoo.com/v8/finance/chart/" + encodeURIComponent(symbol) +
+      "?period1=" + period1 + "&period2=" + now + "&interval=1d&events=history&includeAdjustedClose=true";
+    const r = await fetch(url, { headers: { accept: "application/json", "user-agent": "Mozilla/5.0" } });
+    if (!r.ok) return { symbol, values: [] };
+    const j = await r.json();
+    const res = j?.chart?.result?.[0];
+    const q = res?.indicators?.quote?.[0];
+    const ts = res?.timestamp || [];
+    const adj = res?.indicators?.adjclose?.[0]?.adjclose || [];
+    const values = ts.map((t,i) => ({
+      datetime: new Date(t*1000).toISOString().slice(0,10),
+      open: Number(q?.open?.[i]) || 0,
+      high: Number(q?.high?.[i]) || 0,
+      low: Number(q?.low?.[i]) || 0,
+      close: Number(q?.close?.[i]) || Number(adj[i]) || 0,
+      volume: Number(q?.volume?.[i]) || 0
+    })).filter(x => x.close > 0);
+    return { symbol, values };
+  } catch (_) {
+    return { symbol, values: [] };
+  }
+}
+async function yahooTimeSeries(symbols) {
+  const out = {};
+  for (let i=0; i<symbols.length; i+=25) {
+    const chunk = symbols.slice(i,i+25);
+    const results = await Promise.all(chunk.map(yahooOne));
+    for (const r of results) out[r.symbol] = r.values;
+  }
+  return out;
+}
+
 
 async function marketMovers(env, market, direction) {
   const r = await td("/market_movers/" + market + "?direction=" + direction + "&outputsize=50&country=USA", env);
@@ -113,12 +149,28 @@ export default {
 if (url.pathname === "/api") {
         const symbols = cleanSymbols(url.searchParams.get("symbols") || url.searchParams.get("symbol"));
         if (!symbols.length) return json({ status: "error", message: "Falta symbol o symbols." }, 400);
+
         const path = "/time_series?symbol=" + encodeURIComponent(symbols.join(",")) + "&interval=1day&outputsize=260&order=desc&timezone=America/New_York";
         const result = await td(path, env);
-        if (result.httpStatus !== 200) return json({ status: "error", message: result.data?.message || "Error de Twelve Data.", details: result.data }, result.httpStatus);
-        if (result.data?.status === "error") return json(result.data, 400);
-        const data = normalizeBatch(symbols, result.data);
-        return json({ status: "ok", data, fetchedAt: new Date().toISOString(), creditsUsed: result.creditsUsed, creditsLeft: result.creditsLeft }, 200, { "api-credits-used": result.creditsUsed || "", "api-credits-left": result.creditsLeft || "", "cache-control": "public, max-age=300" });
+
+        if (result.httpStatus === 200 && result.data?.status !== "error") {
+          const data = normalizeBatch(symbols, result.data);
+          return json({ status: "ok", data, fetchedAt: new Date().toISOString(), source: "Twelve Data", creditsUsed: result.creditsUsed, creditsLeft: result.creditsLeft },
+            200, { "api-credits-used": result.creditsUsed || "", "api-credits-left": result.creditsLeft || "", "cache-control": "public, max-age=300" });
+        }
+
+        // Twelve Data Basic only allows 8 API credits/minute. If that limit is hit,
+        // automatically use Yahoo Finance chart data so the Scanner does not stall.
+        if (result.httpStatus === 429) {
+          const data = await yahooTimeSeries(symbols);
+          const usable = Object.values(data).some(v => Array.isArray(v) && v.length);
+          if (usable) {
+            return json({ status: "ok", data, fetchedAt: new Date().toISOString(), source: "Yahoo Finance fallback", warning: "Twelve Data rate limit reached; Scanner continued with fallback data." },
+              200, { "cache-control": "public, max-age=300" });
+          }
+        }
+
+        return json({ status: "error", message: result.data?.message || "Error de proveedor de datos.", details: result.data }, result.httpStatus || 502);
       }
       return json({ status: "ok", service: "Weekly Range Scanner PRO", endpoints: ["/health", "/universe", "/api?symbol=NVDA", "/api?symbols=NVDA,META,AMZN"] });
     } catch (error) {
