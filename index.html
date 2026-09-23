@@ -10,7 +10,7 @@ function render(a){let valid=a.filter(x=>x.long||x.short).sort((x,y)=>y.rank-x.r
 async function fetchBatch(ss){
   const key=ss.join(',');
   if(CACHE.has(key))return CACHE.get(key);
-  const r=await fetch(API+'?symbols='+encodeURIComponent(key),{cache:'no-store'});
+  const r=await fetch(API+'?symbols='+encodeURIComponent(key),{cache:'no-store'}); 
   if(!r.ok){
     if(r.status===429)throw Error('El proveedor principal está limitado y el fallback tampoco respondió.');
     throw Error('HTTP '+r.status);
