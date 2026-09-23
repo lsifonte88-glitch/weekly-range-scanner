@@ -8,23 +8,20 @@ function williamsR(v,n=14){let w=weeklyBars(v);if(w.length<n+3)return{value:null
 function setup(v,s){let f=flow(v),t=trend(v),r=ranges(v),c=v.at(-1),p=r.r4||r.r8||r.r12||0,a=v.map(x=>x.close),e20=ema(a,20),e50=ema(a,50),e200=ema(a,200),dist20=e20?pct(c.close,e20):0,dist50=e50?pct(c.close,e50):0;let long=f.score>=70&&t==='Alcista',short=f.score<=30&&t==='Bajista';let emaStructure=long?(c.close>e20&&e20>e50&&(!e200||e50>e200)):short?(c.close<e20&&e20<e50&&(!e200||e50<e200)):false;let rvolQuality=f.rv>=2?10:f.rv>=1.5?8:f.rv>=1.2?5:f.rv>=1?2:0;let volatilityQuality=p>=3?8:p>=2?6:p>=1?3:0;let extension=Math.min(25,Math.abs(dist20));let momentum=Math.max(-5,Math.min(8,pct(c.close,v[Math.max(0,v.length-6)].close)*.8));let quality=Math.max(0,Math.min(100,(emaStructure?20:8)+rvolQuality+volatilityQuality+momentum+(f.score*.55)-extension*.7));let phase=long?(dist20>8?'EXTENDIDO ↑':f.rv>=1.5?'MOVIMIENTO ↑':'PRE-MOVIMIENTO ↑'):short?(Math.abs(dist20)>8?'EXTENDIDO ↓':f.rv>=1.5?'MOVIMIENTO ↓':'PRE-MOVIMIENTO ↓'):'NEUTRAL';let rank=long?quality:(short?quality:0);return{s,v,f,t,r,c,e20,e50,e200,dist20,dist50,long,short,phase,rank,high:c.close*(1+p/100)}}function setup(v,s){let f=flow(v),t=trend(v),r=ranges(v),c=v.at(-1),p=r.r4||r.r8||r.r12||0,a=v.map(x=>x.close),e20=ema(a,20),e50=ema(a,50),e200=ema(a,200),dist20=e20?pct(c.close,e20):0,dist50=e50?pct(c.close,e50):0,wr=williamsR(v,14);let long=f.score>=70&&t==='Alcista',short=f.score<=30&&t==='Bajista';let emaStructure=long?(c.close>e20&&e20>e50&&(!e200||e50>e200)):short?(c.close<e20&&e20<e50&&(!e200||e50<e200)):false;let rvolQuality=f.rv>=2?10:f.rv>=1.5?8:f.rv>=1.2?5:f.rv>=1?2:0;let volatilityQuality=p>=3?8:p>=2?6:p>=1?3:0;let extension=Math.min(25,Math.abs(dist20));let momentum=Math.max(-5,Math.min(8,pct(c.close,v[Math.max(0,v.length-6)].close)*.8));let wrQuality=long?(wr.signal==='PRE-MOVIMIENTO UP'?10:wr.signal==='PRE-SEÑAL UP'?6:wr.signal==='CONFIRMACION UP'?4:wr.direction==='CRUCE UP'?5:0):0;let quality=Math.max(0,Math.min(100,(emaStructure?20:8)+rvolQuality+volatilityQuality+momentum+(f.score*.55)+wrQuality-extension*.7));let phase=long?(wr.signal==='PRE-MOVIMIENTO UP'?'PRE-MOVIMIENTO UP':wr.signal==='CONFIRMACION UP'?'MOVIMIENTO UP':dist20>8?'EXTENDIDO UP':f.rv>=1.5?'MOVIMIENTO UP':'PRE-MOVIMIENTO UP'):short?(Math.abs(dist20)>8?'EXTENDIDO DOWN':f.rv>=1.5?'MOVIMIENTO DOWN':'PRE-MOVIMIENTO DOWN'):'NEUTRAL';let rank=long?quality:(short?quality:0);return{s,v,f,t,r,c,e20,e50,e200,dist20,dist50,long,short,phase,rank,high:c.close*(1+p/100),wr}}
 function render(a){let valid=a.filter(x=>x.long||x.short).sort((x,y)=>y.rank-x.rank);a=[...valid];document.getElementById('rows').innerHTML=a.map((x,i)=>`<tr><td><b>${i+1}</b></td><td><b>${x.s}</b></td><td>$${x.c.close.toFixed(2)}</td><td class="green"><b>$${x.c.close.toFixed(2)} → $${x.high.toFixed(2)}</b></td><td>${x.r.r4.toFixed(2)}%</td><td>${x.r.r8.toFixed(2)}%</td><td>${x.r.r12.toFixed(2)}%</td><td>${x.f.rv.toFixed(2)}x</td><td>$${x.f.dv>=1e9?(x.f.dv/1e9).toFixed(2)+'B':x.f.dv>=1e6?(x.f.dv/1e6).toFixed(1)+'M':x.f.dv.toFixed(0)}</td><td class="score ${x.f.score>=70?'green':x.f.score<=30?'red':'yellow'}">${x.f.score}</td><td class="score ${x.long?'green':'red'}">${x.rank.toFixed(1)}</td><td>${x.wr.value===null?'—':x.wr.value.toFixed(1)}</td><td><b>${x.wr.direction}</b></td><td class="${x.long?'green':'red'}"><b>${x.phase}</b></td><td>${x.f.label}</td><td class="${x.t==='Alcista'?'green':x.t==='Bajista'?'red':'yellow'}">${x.t}</td><td class="${x.long?'green':'red'}"><b>${x.long?'SÍ':'NO'}</b></td><td class="${x.short?'red':'green'}"><b>${x.short?'SÍ':'NO'}</b></td></tr>`).join('')||'<tr><td colspan="16" class="loading">No hay símbolos que cumplan los filtros direccionales.</td></tr>'}function progress(d,t,msg){document.getElementById('progressBar').style.width=(t?d/t*100:0)+'%';document.getElementById('progressText').textContent=msg||''}
 async function fetchBatch(ss){
-  let key=ss.join(',');
+  const key=ss.join(',');
   if(CACHE.has(key))return CACHE.get(key);
-  let wait=0;
-  for(let attempt=0;attempt<3;attempt++){
-    let r=await fetch(API+'?symbols='+encodeURIComponent(key),{cache:'no-store'});
-    if(r.status!==429){
-      if(!r.ok)throw Error('HTTP '+r.status);
-      let d=await r.json();
-      if(d.status!=='ok')throw Error(d.message||'Error API');
-      CACHE.set(key,d);
-      return d;
-    }
-    wait=Math.max(65000,Number(r.headers.get('retry-after')||0)*1000);
-    document.getElementById('status').textContent='Límite de Twelve Data alcanzado. Esperando '+Math.round(wait/1000)+' s...';
-    await sleep(wait);
+  const r=await fetch(API+'?symbols='+encodeURIComponent(key),{cache:'no-store'});
+  if(!r.ok){
+    if(r.status===429)throw Error('El proveedor de datos sigue limitado. El Worker intentó el fallback automático y no pudo obtener datos.');
+    throw Error('HTTP '+r.status);
   }
-  throw Error('HTTP 429: cuota de Twelve Data agotada. Reduce el universo o usa un plan con mayor cuota.');
+  const d=await r.json();
+  if(d.status!=='ok')throw Error(d.message||'Error API');
+  CACHE.set(key,d);
+  if(d.source==='Yahoo Finance fallback'){
+    document.getElementById('status').textContent='Twelve Data limitado · usando datos alternativos automáticamente.';
+  }
+  return d;
 }
 async function smartScanUniverse(){
   const b=document.getElementById('smartScan'); b.disabled=true;
