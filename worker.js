@@ -130,7 +130,8 @@ async function marketMovers(env, market, direction) {
   const values = Array.isArray(r.data?.values) ? r.data.values : [];
   return { ok:true, values };
 }
-\nasync function universe(env) {
+
+async function universe(env) {
   const [stocks, etfs] = await Promise.all([td("/stocks?country=United%20States", env), td("/etf", env)]);
   let stockList = Array.isArray(stocks.data?.data) ? stocks.data.data : [];
   let etfList = Array.isArray(etfs.data?.data) ? etfs.data.data : [];
