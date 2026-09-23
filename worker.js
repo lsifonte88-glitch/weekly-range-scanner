@@ -90,10 +90,13 @@ async function yahooMovers() {
 }
 async function yahooTimeSeries(symbols) {
   const out = {};
-  for (let i=0; i<symbols.length; i+=25) {
-    const chunk = symbols.slice(i,i+25);
+  // Yahoo puede limitar lotes grandes; procesamos en grupos pequeños para evitar que
+  // el proveedor devuelva cero datos a todos los símbolos por rate-limit.
+  for (let i=0; i<symbols.length; i+=5) {
+    const chunk = symbols.slice(i,i+5);
     const results = await Promise.all(chunk.map(yahooOne));
     for (const r of results) out[r.symbol] = r.values;
+    if (i + 5 < symbols.length) await new Promise(r => setTimeout(r, 120));
   }
   return out;
 }
