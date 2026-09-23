@@ -98,7 +98,7 @@ async function stooqOne(symbol) {
 async function stooqTimeSeries(symbols){
   const out={};
   for(let i=0;i<symbols.length;i+=6){
-    const results=await Promise.all(symbols.slice(i,i+12).map(stooqOne));
+    const results=await Promise.all(symbols.slice(i,i+6).map(stooqOne));
     for(const r of results)out[r.symbol]=r.values;
   }
   return out;
@@ -127,7 +127,7 @@ export default {
     try {
       const url = new URL(request.url);
       if (url.pathname === "/") {
-        const r = await fetch("https://raw.githubusercontent.com/lsifonte88-glitch/weekly-range-scanner/main/index.html?v=20260922-8", { cf: { cacheTtl: 0 } });
+        const r = await fetch("https://raw.githubusercontent.com/lsifonte88-glitch/weekly-range-scanner/main/index.html?v=20260922-9", { cf: { cacheTtl: 0 } });
         if (!r.ok) return new Response("No se pudo cargar la aplicación.", { status: 502 });
         return new Response(await r.text(), { headers: { "content-type": "text/html; charset=UTF-8", "cache-control": "no-store" } });
       }
