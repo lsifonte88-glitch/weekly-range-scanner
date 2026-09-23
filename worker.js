@@ -44,30 +44,49 @@ function normalizeBatch(symbols, raw) {
 }
 
 async function yahooOne(symbol) {
-  try {
-    const now = Math.floor(Date.now()/1000);
-    const period1 = now - 370 * 86400;
-    const url = "https://query1.finance.yahoo.com/v8/finance/chart/" + encodeURIComponent(symbol) +
-      "?period1=" + period1 + "&period2=" + now + "&interval=1d&events=history&includeAdjustedClose=true";
-    const r = await fetch(url, { headers: { accept: "application/json", "user-agent": "Mozilla/5.0" } });
-    if (!r.ok) return { symbol, values: [] };
-    const j = await r.json();
-    const res = j?.chart?.result?.[0];
-    const q = res?.indicators?.quote?.[0];
-    const ts = res?.timestamp || [];
-    const adj = res?.indicators?.adjclose?.[0]?.adjclose || [];
-    const values = ts.map((t,i) => ({
-      datetime: new Date(t*1000).toISOString().slice(0,10),
-      open: Number(q?.open?.[i]) || 0,
-      high: Number(q?.high?.[i]) || 0,
-      low: Number(q?.low?.[i]) || 0,
-      close: Number(q?.close?.[i]) || Number(adj[i]) || 0,
-      volume: Number(q?.volume?.[i]) || 0
-    })).filter(x => x.close > 0);
-    return { symbol, values };
-  } catch (_) {
-    return { symbol, values: [] };
+  const now = Math.floor(Date.now()/1000);
+  const period1 = now - 370 * 86400;
+  const hosts = ["query1.finance.yahoo.com","query2.finance.yahoo.com"];
+  for (const host of hosts) {
+    try {
+      const url = "https://" + host + "/v8/finance/chart/" + encodeURIComponent(symbol) +
+        "?period1=" + period1 + "&period2=" + now + "&interval=1d&events=history&includeAdjustedClose=true";
+      const r = await fetch(url, { headers: { accept: "application/json", "user-agent": "Mozilla/5.0" } });
+      if (!r.ok) continue;
+      const j = await r.json();
+      const res = j?.chart?.result?.[0];
+      const q = res?.indicators?.quote?.[0];
+      const ts = res?.timestamp || [];
+      const adj = res?.indicators?.adjclose?.[0]?.adjclose || [];
+      const values = ts.map((t,i) => ({
+        datetime: new Date(t*1000).toISOString().slice(0,10),
+        open: Number(q?.open?.[i]) || 0,
+        high: Number(q?.high?.[i]) || 0,
+        low: Number(q?.low?.[i]) || 0,
+        close: Number(q?.close?.[i]) || Number(adj[i]) || 0,
+        volume: Number(q?.volume?.[i]) || 0
+      })).filter(x => x.close > 0);
+      if (values.length) return { symbol, values };
+    } catch (_) {}
   }
+  return { symbol, values: [] };
+}
+async function yahooScreener(scrIds,count=250) {
+  try {
+    const url="https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?formatted=false&lang=en-US&region=US&scrIds="+encodeURIComponent(scrIds)+"&count="+count+"&corsDomain=finance.yahoo.com";
+    const r=await fetch(url,{headers:{accept:"application/json","user-agent":"Mozilla/5.0"}});
+    if(!r.ok)return [];
+    const j=await r.json();
+    return j?.finance?.result?.[0]?.quotes||[];
+  }catch(_){return []}
+}
+async function yahooMovers() {
+  const sets=await Promise.all([
+    yahooScreener("day_gainers",250),
+    yahooScreener("day_losers",250),
+    yahooScreener("most_actives",250)
+  ]);
+  return [...new Set(sets.flat().map(x=>String(x.symbol||"").toUpperCase()).filter(x=>x && x!=="MSFT" && /^[A-Z0-9.-]+$/.test(x)))];
 }
 async function yahooTimeSeries(symbols) {
   const out = {};
@@ -127,7 +146,7 @@ export default {
     try {
       const url = new URL(request.url);
       if (url.pathname === "/") {
-        const r = await fetch("https://raw.githubusercontent.com/lsifonte88-glitch/weekly-range-scanner/main/index.html?v=20260922-9", { cf: { cacheTtl: 0 } });
+        const r = await fetch("https://raw.githubusercontent.com/lsifonte88-glitch/weekly-range-scanner/main/index.html?v=20260922-10", { cf: { cacheTtl: 0 } });
         if (!r.ok) return new Response("No se pudo cargar la aplicación.", { status: 502 });
         return new Response(await r.text(), { headers: { "content-type": "text/html; charset=UTF-8", "cache-control": "no-store" } });
       }
@@ -138,20 +157,11 @@ export default {
       }
       if (url.pathname === "/health") return json({ status: "ok", service: "Weekly Range Scanner PRO", time: new Date().toISOString() });
       if (url.pathname === "/prefilter") {
-        const cached = await Promise.all([
-          marketMovers(env, "stocks", "gainers"),
-          marketMovers(env, "stocks", "losers"),
-          marketMovers(env, "etf", "gainers"),
-          marketMovers(env, "etf", "losers")
-        ]);
-        const symbols = [...new Set(cached.filter(x => x.ok).flatMap(x => x.values).map(x => String(x.symbol||"").toUpperCase())
-          .filter(Boolean).filter(x => x !== "MSFT").filter(x => /^[A-Z0-9.-]+$/.test(x)))];
-        if(symbols.length){
-          return json({status:"ok",count:symbols.length,symbols,generatedAt:new Date().toISOString(),source:"Twelve Data market_movers",note:"Prefiltro: mayores ganadores/perdedores del día."},200,{"cache-control":"no-store"});
+        const symbols = await yahooMovers();
+        if (symbols.length) {
+          return json({status:"ok",count:symbols.length,symbols,generatedAt:new Date().toISOString(),source:"Yahoo Finance screener",note:"Prefiltro amplio: ganadores, perdedores y mayor volumen. Los filtros completos del Scanner se aplican después."},200,{"cache-control":"public, max-age=60"});
         }
-        const all=await universe(env);
-        if(!all.length) return json({status:"error",message:"Twelve Data no devolvió market movers ni un universo válido."},502);
-        return json({status:"ok",count:all.length,symbols:all,generatedAt:new Date().toISOString(),source:"universe-fallback",note:"Market movers sin datos o no disponibles. Se usa el universo completo y se aplican TODOS los filtros del Scanner."},200,{"cache-control":"no-store"});
+        return json({status:"error",message:"Yahoo Finance screener no devolvió candidatos."},502);
       }
       if (url.pathname === "/universe") {
         const symbols = await universe(env);
