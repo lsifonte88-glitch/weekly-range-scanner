@@ -186,8 +186,9 @@ export default {
         return json({status:"ok",data,generatedAt:new Date().toISOString(),sources:{sec:true,twelveData:true,institutional13F:true,congress:Boolean(env.QUIVER_API_KEY||env.CONGRESS_API_URL),etf:Boolean(env.ETF_PROVIDER_URL||env.ETF_COMPOSITION_ENABLED==="true")}});
       }
 if (url.pathname === "/api") {
-        const symbols = cleanSymbols(url.searchParams.get("symbols") || url.searchParams.get("symbol"));
-        if (!symbols.length) return json({ status: "error", message: "Falta symbol o symbols." }, 400);
+        const requestedSymbols = cleanSymbols(url.searchParams.get("symbols") || url.searchParams.get("symbol"));
+        if (!requestedSymbols.length) return json({ status: "error", message: "Falta symbol o symbols." }, 400);
+        const symbols = requestedSymbols.slice(0, 8);
 
         // Recuperación por símbolo: evita que un lote parcialmente bloqueado deje al
         // frontend sin datos aunque uno de los proveedores sí entregue históricos.
@@ -247,14 +248,16 @@ if (url.pathname === "/api") {
             fetchedAt: new Date().toISOString(),
             source: Object.entries(counts).map(([k,v]) => k + ": " + v).join(" + "),
             usable: usable.length,
-            requested: symbols.length
+            requested: requestedSymbols.length,
+            processed: symbols.length
           }, 200, { "cache-control": "no-store" });
         }
 
         return json({
           status: "error",
           message: "No se pudieron obtener datos históricos de ningún proveedor.",
-          requested: symbols.length,
+          requested: requestedSymbols.length,
+          processed: symbols.length,
           providersTried: ["Stooq", "Yahoo Finance", "Twelve Data"]
         }, 502);
       }
