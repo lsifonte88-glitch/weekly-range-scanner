@@ -185,33 +185,32 @@ if (url.pathname === "/api") {
         const symbols = cleanSymbols(url.searchParams.get("symbols") || url.searchParams.get("symbol"));
         if (!symbols.length) return json({ status: "error", message: "Falta symbol o symbols." }, 400);
 
+        // Yahoo primero: evita consumir la cuota de Twelve Data en el Scanner.
+        let data = await yahooTimeSeries(symbols);
+        let usable = Object.values(data).some(v => Array.isArray(v) && v.length);
+        if (usable) {
+          return json({ status: "ok", data, fetchedAt: new Date().toISOString(), source: "Yahoo Finance" },
+            200, { "cache-control": "public, max-age=300" });
+        }
+
+        // Twelve Data queda como segundo proveedor.
         const path = "/time_series?symbol=" + encodeURIComponent(symbols.join(",")) + "&interval=1day&outputsize=260&order=desc&timezone=America/New_York";
         const result = await td(path, env);
-
         if (result.httpStatus === 200 && result.data?.status !== "error") {
-          const data = normalizeBatch(symbols, result.data);
+          data = normalizeBatch(symbols, result.data);
           return json({ status: "ok", data, fetchedAt: new Date().toISOString(), source: "Twelve Data", creditsUsed: result.creditsUsed, creditsLeft: result.creditsLeft },
             200, { "api-credits-used": result.creditsUsed || "", "api-credits-left": result.creditsLeft || "", "cache-control": "public, max-age=300" });
         }
 
-        // Twelve Data Basic only allows 8 API credits/minute. If that limit is hit,
-        // automatically use Yahoo Finance chart data so the Scanner does not stall.
-        if (result.httpStatus !== 200 || result.data?.status === "error") {
-          let data = await yahooTimeSeries(symbols);
-          let usable = Object.values(data).some(v => Array.isArray(v) && v.length);
-          if (usable) {
-            return json({ status: "ok", data, fetchedAt: new Date().toISOString(), source: "Yahoo Finance fallback", warning: "Twelve Data rate limit reached; Scanner continued with fallback data." },
-              200, { "cache-control": "public, max-age=300" });
-          }
-          data = await stooqTimeSeries(symbols);
-          usable = Object.values(data).some(v => Array.isArray(v) && v.length);
-          if (usable) {
-            return json({ status: "ok", data, fetchedAt: new Date().toISOString(), source: "Stooq fallback", warning: "Twelve Data and Yahoo Finance were unavailable; Scanner continued with Stooq data." },
-              200, { "cache-control": "public, max-age=300" });
-          }
+        // Último recurso: Stooq.
+        data = await stooqTimeSeries(symbols);
+        usable = Object.values(data).some(v => Array.isArray(v) && v.length);
+        if (usable) {
+          return json({ status: "ok", data, fetchedAt: new Date().toISOString(), source: "Stooq fallback" },
+            200, { "cache-control": "public, max-age=300" });
         }
 
-        return json({ status: "error", message: result.data?.message || "Error de proveedor de datos.", details: result.data }, result.httpStatus || 502);
+        return json({ status: "error", message: "No se pudieron obtener datos históricos de Yahoo Finance, Twelve Data ni Stooq.", details: result.data }, 502);
       }
       return json({ status: "ok", service: "Weekly Range Scanner PRO", endpoints: ["/health", "/universe", "/api?symbol=NVDA", "/api?symbols=NVDA,META,AMZN"] });
     } catch (error) {
