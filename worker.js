@@ -189,32 +189,48 @@ if (url.pathname === "/api") {
         const symbols = cleanSymbols(url.searchParams.get("symbols") || url.searchParams.get("symbol"));
         if (!symbols.length) return json({ status: "error", message: "Falta symbol o symbols." }, 400);
 
-        // Yahoo primero: evita consumir la cuota de Twelve Data en el Scanner.
+        // Recuperamos datos por capas y, sobre todo, NO descartamos el lote entero
+        // si un proveedor solo devuelve una parte de los símbolos.
         let data = await yahooTimeSeries(symbols);
-        let usable = Object.values(data).some(v => Array.isArray(v) && v.length);
+        let missing = symbols.filter(s => !Array.isArray(data[s]) || data[s].length < 60);
+
+        // Stooq completa los símbolos que Yahoo no pudo entregar.
+        if (missing.length) {
+          const stooq = await stooqTimeSeries(missing);
+          for (const s of missing) {
+            if (Array.isArray(stooq[s]) && stooq[s].length) data[s] = stooq[s];
+          }
+        }
+
+        missing = symbols.filter(s => !Array.isArray(data[s]) || data[s].length < 60);
+
+        // Twelve Data completa únicamente los faltantes, reduciendo consumo.
+        let result = null;
+        if (missing.length) {
+          const path = "/time_series?symbol=" + encodeURIComponent(missing.join(",")) +
+            "&interval=1day&outputsize=260&order=desc&timezone=America/New_York";
+          result = await td(path, env);
+          if (result.httpStatus === 200 && result.data?.status !== "error") {
+            const tdData = normalizeBatch(missing, result.data);
+            for (const s of missing) {
+              if (Array.isArray(tdData[s]?.values) && tdData[s].values.length) data[s] = tdData[s].values;
+              else if (Array.isArray(tdData[s])) data[s] = tdData[s];
+            }
+          }
+        }
+
+        const usable = Object.values(data).some(v => Array.isArray(v) && v.length >= 60);
         if (usable) {
-          return json({ status: "ok", data, fetchedAt: new Date().toISOString(), source: "Yahoo Finance" },
+          const sources = [];
+          if (symbols.some(s => Array.isArray(data[s]) && data[s].length && !missing.includes(s))) sources.push("Yahoo Finance");
+          return json({ status: "ok", data, fetchedAt: new Date().toISOString(),
+            source: sources.length ? sources.join(" + fallbacks") : "Yahoo/Stooq/Twelve Data" },
             200, { "cache-control": "public, max-age=300" });
         }
 
-        // Twelve Data queda como segundo proveedor.
-        const path = "/time_series?symbol=" + encodeURIComponent(symbols.join(",")) + "&interval=1day&outputsize=260&order=desc&timezone=America/New_York";
-        const result = await td(path, env);
-        if (result.httpStatus === 200 && result.data?.status !== "error") {
-          data = normalizeBatch(symbols, result.data);
-          return json({ status: "ok", data, fetchedAt: new Date().toISOString(), source: "Twelve Data", creditsUsed: result.creditsUsed, creditsLeft: result.creditsLeft },
-            200, { "api-credits-used": result.creditsUsed || "", "api-credits-left": result.creditsLeft || "", "cache-control": "public, max-age=300" });
-        }
-
-        // Último recurso: Stooq.
-        data = await stooqTimeSeries(symbols);
-        usable = Object.values(data).some(v => Array.isArray(v) && v.length);
-        if (usable) {
-          return json({ status: "ok", data, fetchedAt: new Date().toISOString(), source: "Stooq fallback" },
-            200, { "cache-control": "public, max-age=300" });
-        }
-
-        return json({ status: "error", message: "No se pudieron obtener datos históricos de Yahoo Finance, Twelve Data ni Stooq.", details: result.data }, 502);
+        return json({ status: "error",
+          message: "No se pudieron obtener suficientes datos históricos para los símbolos solicitados.",
+          details: result?.data || null }, 502);
       }
       return json({ status: "ok", service: "Weekly Range Scanner PRO", endpoints: ["/health", "/universe", "/api?symbol=NVDA", "/api?symbols=NVDA,META,AMZN"] });
     } catch (error) {
