@@ -56,18 +56,26 @@ async function smDetails(symbol){
 }
 function smSleep(ms){return new Promise(r=>setTimeout(r,ms));}
 async function smScanUniverse(){
-  const status=document.getElementById("smStatus"),rows=document.getElementById("smRows"),button=document.getElementById("smUniverse"),progressBar=document.getElementById("progressBar"),progressText=document.getElementById("progressText");
-  if(!status||!rows||!button)return;
-  button.disabled=true;rows.innerHTML='<tr><td colspan="15" class="loading">Iniciando universo...</td></tr>';
-  const results=[];
-  try{
-    for(let i=0;i<SM_UNIVERSE.length;i++){
-      const symbol=SM_UNIVERSE[i],completed=i+1;status.textContent=`Smart Money Universo · ${completed}/${SM_UNIVERSE.length} · ${symbol}`;
-      const r=await fetch(SM_API+"?symbol="+encodeURIComponent(symbol)+"&detail=0&_="+Date.now(),{cache:"no-store"});const text=await r.text();let data;try{data=JSON.parse(text)}catch{throw new Error("El Worker no devolvió JSON para "+symbol+". HTTP "+r.status)}if(!r.ok||data.status!=="ok")throw new Error(data.message||"Error HTTP "+r.status+" para "+symbol);if(Array.isArray(data.data))results.push(...data.data);results.sort((a,b)=>(Number(b.score)||0)-(Number(a.score)||0));smRenderRows(results);if(progressBar)progressBar.style.width=(completed/SM_UNIVERSE.length*100)+"%";if(progressText)progressText.textContent=`Smart Money ${completed}/${SM_UNIVERSE.length}`;
-      // Pausa corta para respetar límites de los proveedores sin bloquear un minuto por símbolo.
-      if(i<SM_UNIVERSE.length-1)await smSleep(1500);
+  const status=document.getElementById("smStatus");
+  const tbody=document.querySelector("#smTable tbody");
+  if(!status||!tbody)return;
+  status.textContent="Analizando universo Smart Money por bloques de 8…";
+  tbody.innerHTML="";
+  let all=[];
+  const chunks=[];
+  for(let i=0;i<SM_UNIVERSE.length;i+=8) chunks.push(SM_UNIVERSE.slice(i,i+8));
+  for(let i=0;i<chunks.length;i++){
+    try{
+      const url=SM_API+"?symbols="+encodeURIComponent(chunks[i].join(","))+"&detail=0";
+      const r=await fetch(url,{cache:"no-store"});
+      const j=await r.json();
+      if(Array.isArray(j.data)) all.push(...j.data);
+      smRenderRows(all);
+      status.textContent="Smart Money: bloque "+(i+1)+"/"+chunks.length+" · "+all.length+" símbolos";
+    }catch(e){
+      status.textContent="Smart Money: bloque "+(i+1)+"/"+chunks.length+" con error · continuando";
     }
-    status.textContent="Smart Money Universo terminado · "+results.length+" símbolos";
-  }catch(e){console.error("SMART MONEY UNIVERSO ERROR:",e);status.textContent="ERROR: "+e.message;rows.innerHTML=`<tr><td colspan="15" class="red">${smEscape(e.message)}</td></tr>`}finally{button.disabled=false}
+  }
+  smRenderRows(all);
+  status.textContent="Smart Money terminado: "+all.length+" símbolos";
 }
-window.smLoad=smLoad;window.smScanUniverse=smScanUniverse;window.smDetails=smDetails;console.log("SMART MONEY JS cargado correctamente.");
