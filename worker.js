@@ -196,7 +196,7 @@ export default {
         const data = [];
         if (!detail) {
           for (const s of symbols) data.push(await smartMoneyFastData(s,env,secMap));
-          return json({status:"ok",mode:"FAST_SUBREQUEST_SAFE",data,generatedAt:new Date().toISOString(),sources:{sec:true,marketHistory:"Stooq only",options:"Yahoo Finance",institutional13F:"deferred",congress:Boolean(env.QUIVER_API_KEY),etf:"deferred"}});
+          return json({status:"ok",mode:"FAST_SUBREQUEST_SAFE",data,generatedAt:new Date().toISOString(),sources:{sec:true,marketHistoryFallbacks:["Stooq","Yahoo Finance","Twelve Data"],options:"Yahoo Finance",institutional13F:"deferred",congress:Boolean(env.QUIVER_API_KEY),etf:"deferred"}});
         }
         const institutionalSnap = await institutionalSnapshot(env);
         for (const s of symbols) data.push(await smartMoneyData(s,env,true,institutionalSnap,s,secMap));
@@ -585,9 +585,10 @@ async function smartMoneyFastData(symbol,env,secMap){
       }
     }
   }catch(_){}
-  const history=await stooqOne(symbol);
+  // FAST: usar Stooq como primera opción, pero caer a Yahoo/Twelve Data si Stooq no responde.
+  const history=await smartHistory(symbol,env,25);
   const values=Array.isArray(history.values)&&history.values.length>=25?history.values:[];
-  const source=values.length?"Stooq":"Unavailable";
+  const source=values.length?(history.source||"Unavailable"):"Unavailable";
   const marketFlow=marketFlowFromValues(values,source);
   const unusual=values.length?unusualFromValues(values.slice(-25),source):{signal:"UNAVAILABLE",score:0,rvol:0,source,note:"No hay histórico Stooq disponible"};
   const options=await yahooOptionsFlow(symbol,env,false) || {enabled:false,signal:"UNAVAILABLE",note:"Yahoo options no disponible"};
