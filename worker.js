@@ -150,12 +150,12 @@ export default {
     try {
       const url = new URL(request.url);
       if (url.pathname === "/") {
-        const r = await fetch("https://raw.githubusercontent.com/lsifonte88-glitch/weekly-range-scanner/main/index.html?v=09f636b", { cf: { cacheTtl: 0 } });
+        const r = await fetch("https://raw.githubusercontent.com/lsifonte88-glitch/weekly-range-scanner/main/index.html?v=fea87b7f01e984f54e61d9e63aec7aebbeada021", { cf: { cacheTtl: 0 } });
         if (!r.ok) return new Response("No se pudo cargar la aplicación.", { status: 502 });
         return new Response(await r.text(), { headers: { "content-type": "text/html; charset=UTF-8", "cache-control": "no-store" } });
       }
       if (url.pathname === "/smart-money.js") {
-        const r = await fetch("https://raw.githubusercontent.com/lsifonte88-glitch/weekly-range-scanner/main/smart-money.js?v=09f636b", { cf: { cacheTtl: 0 } });
+        const r = await fetch("https://raw.githubusercontent.com/lsifonte88-glitch/weekly-range-scanner/main/smart-money.js?v=fea87b7f01e984f54e61d9e63aec7aebbeada021", { cf: { cacheTtl: 0 } });
         if (!r.ok) return new Response("No se pudo cargar Smart Money.", { status: 502 });
         return new Response(await r.text(), { headers: { "content-type": "application/javascript; charset=UTF-8", "cache-control": "no-store" } });
       }
@@ -261,7 +261,7 @@ if (url.pathname === "/api") {
           providersTried: ["Stooq", "Yahoo Finance", "Twelve Data"]
         }, 502);
       }
-      return json({ status: "ok", service: "Weekly Range Scanner PRO", build: "20260922-datafix2", endpoints: ["/health", "/universe", "/api?symbol=NVDA", "/api?symbols=NVDA,META,AMZN"] });
+      return json({ status: "ok", service: "Weekly Range Scanner PRO", build: "20260927-final", endpoints: ["/health", "/universe", "/api?symbol=NVDA", "/api?symbols=NVDA,META,AMZN"] });
     } catch (error) {
       return json({ status: "error", message: error?.message || String(error) }, 500);
     }
