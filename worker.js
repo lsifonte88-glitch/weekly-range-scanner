@@ -192,11 +192,9 @@ export default {
         const symbols = cleanSymbols(url.searchParams.get("symbols") || url.searchParams.get("symbol"));
         if (!symbols.length) return json({status:"error",message:"Falta symbol o symbols."},400);
         const detail = url.searchParams.get("detail")==="1";
-        let names={};
-        try{
-          const stocks=await td("/stocks?country=United%20States",env);
-          for(const x of (stocks.data?.data||[])) names[String(x.symbol||"").toUpperCase()]=x.name||x.symbol;
-        }catch(_){}
+        // Evitamos una llamada adicional a Twelve Data: SEC submissions ya
+        // aporta el nombre del emisor/compañía cuando se consulta cada CIK.
+        const names={};
         const secMap = await secTickers(env);
         const institutionalSnap = await institutionalSnapshot(env);
         const data = await Promise.all(symbols.map(s => smartMoneyData(s,env,detail,institutionalSnap,names[s]||s,secMap)));
@@ -278,7 +276,7 @@ if (url.pathname === "/api") {
           providersTried: ["Stooq", "Yahoo Finance", "Twelve Data"]
         }, 502);
       }
-      return json({ status: "ok", service: "Weekly Range Scanner PRO", build: "20260927-smartflow-institutional-delta-v3", endpoints: ["/health", "/universe", "/api?symbol=NVDA", "/api?symbols=NVDA,META,AMZN"] });
+      return json({ status: "ok", service: "Weekly Range Scanner PRO", build: "20260927-smartflow-subrequest-fix-v4", endpoints: ["/health", "/universe", "/api?symbol=NVDA", "/api?symbols=NVDA,META,AMZN"] });
     } catch (error) {
       return json({ status: "error", message: error?.message || String(error) }, 500);
     }
@@ -317,8 +315,10 @@ async function insiderData(symbol,cik,env,detail=false){
   const sub=await secFetch(SEC+"/submissions/CIK"+cik+".json",env);
   if(sub.status!==200)return {signal:"NEUTRAL",count:0,netValue:0,events:[],error:"SEC submissions HTTP "+sub.status};
   const j=JSON.parse(sub.text), r=j.filings?.recent||{}, events=[];
-  for(let i=0;i<(r.form||[]).length && events.length<12 && i<6;i++){
-    if(!["4","3","5"].includes(r.form[i]))continue;
+  for(let i=0;i<(r.form||[]).length && events.length<8 && i<4;i++){
+    // Para mantener el radar dentro del límite de subrequests de Cloudflare,
+    // usamos primero Form 4, que concentra las operaciones reportadas de insiders.
+    if(r.form[i]!=="4")continue;
     const accession=r.accessionNumber[i], primary=r.primaryDocument[i], filingDate=r.filingDate[i], reportDate=r.reportDate?.[i]||filingDate;
     const url=SEC_WWW+"/Archives/edgar/data/"+String(Number(cik))+"/"+accession.replaceAll("-","")+"/"+primary;
     const doc=await secFetch(url,env);
