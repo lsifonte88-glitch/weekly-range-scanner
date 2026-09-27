@@ -21,42 +21,53 @@ function smMoney(value){const n=Number(value)||0;if(n>=1e9)return "$"+(n/1e9).to
 
 function smRenderRows(data){
   const rows=document.getElementById("smRows"); if(!rows)return;
-  if(!Array.isArray(data)||!data.length){rows.innerHTML='<tr><td colspan="12" class="loading">Sin datos.</td></tr>';return;}
+  if(!Array.isArray(data)||!data.length){rows.innerHTML='<tr><td colspan="15" class="loading">Sin datos.</td></tr>';return;}
   rows.innerHTML=data.map((x,i)=>{
-    const score=Number(x.score)||0, insider=x.insider||{}, institutional=x.institutional||{}, congress=x.congress||{}, unusual=x.unusual||{}, etf=x.etf||{}, options=x.options||{};
-    return `<tr><td><b>${i+1}</b></td><td><b>${smEscape(x.symbol)}</b></td><td class="score ${score>=70?'green':score<=30?'red':'yellow'}">${score}</td><td>${smBadge(insider.signal)}<br><span class="small">${insider.count||0} eventos · ${smMoney(insider.netValue||0)}</span></td><td>${smBadge(institutional.signal)}<br><span class="small">${institutional.filers||0} managers</span></td><td>${smBadge(congress.signal)}<br><span class="small">${congress.count||0} operaciones</span></td><td>${smBadge(unusual.signal)}<br><span class="small">RVOL ${Number(unusual.rvol||0).toFixed(2)}x · ${Number(unusual.priceChange||0).toFixed(1)}%</span></td><td>${smBadge(etf.signal)}</td><td>${smBadge(options.signal||"OFF")}<br><span class="small">C/P ${options.callPutRatio==null?'—':Number(options.callPutRatio).toFixed(2)+'x'}</span></td><td><span class="small">${smEscape(x.dataQuality||"")}</span></td><td><span class="small">${smEscape(x.asOf||"")}</span></td><td><button type="button" class="smDetailBtn" data-symbol="${smEscape(x.symbol)}">DETALLES</button></td></tr>`;
+    const score=Number(x.score)||0, flow=x.flowDirection||"MIXED", mf=x.marketFlow||{}, insider=x.insider||{}, institutional=x.institutional||{}, congress=x.congress||{}, unusual=x.unusual||{}, etf=x.etf||{}, options=x.options||{}, conf=x.confluence||{};
+    return `<tr><td><b>${i+1}</b></td><td><b>${smEscape(x.symbol)}</b></td><td><span class="score ${score>=70?'green':score<=30?'red':'yellow'}">${score}</span></td><td>${smBadge(flow)}<br><span class="small">conf. ${smEscape(conf.confidence||"—")}</span></td><td>${smBadge(mf.signal||"UNAVAILABLE")}<br><span class="small">RVOL ${Number(mf.rvol||0).toFixed(2)}x · 5D ${Number(mf.priceChange5D||0).toFixed(1)}%</span></td><td>${smBadge(insider.signal)}<br><span class="small">${insider.count||0} · ${smMoney(insider.netValue||0)}</span></td><td>${smBadge(institutional.signal)}<br><span class="small">${institutional.filers||0} managers · LAGGED</span></td><td>${smBadge(congress.signal)}<br><span class="small">${congress.count||0} ops</span></td><td>${smBadge(unusual.signal)}<br><span class="small">RVOL ${Number(unusual.rvol||0).toFixed(2)}x</span></td><td>${smBadge(etf.signal)}</td><td>${smBadge(options.signal||"OFF")}<br><span class="small">C/P ${options.callPutRatio==null?'—':Number(options.callPutRatio).toFixed(2)+'x'}</span></td><td><span class="small">${smEscape((x.reasons||[]).join(" · "))}</span></td><td><span class="small">${smEscape((x.dataQuality||""))}</span></td><td><span class="small">${smEscape(x.asOf||"")}</span></td><td><button type="button" class="smDetailBtn" data-symbol="${smEscape(x.symbol)}">DETALLES</button></td></tr>`;
   }).join("");
   document.querySelectorAll(".smDetailBtn").forEach(b=>b.addEventListener("click",()=>smDetails(b.dataset.symbol)));
 }
-
 async function smLoad(){
   const input=document.getElementById("symbols"),status=document.getElementById("smStatus"),rows=document.getElementById("smRows");
   if(!input||!status||!rows)return;
   const symbols=[...new Set(input.value.split(",").map(x=>x.trim().toUpperCase()).filter(Boolean))].slice(0,8);
   if(!symbols.length){status.textContent="Introduce al menos un símbolo.";return;}
-  status.textContent="Analizando Smart Money...";rows.innerHTML='<tr><td colspan="12" class="loading">Consultando datos...</td></tr>';
-  try{const r=await fetch(SM_API+"?symbols="+encodeURIComponent(symbols.join(","))+"&_="+Date.now(),{cache:"no-store"});const text=await r.text();let data;try{data=JSON.parse(text)}catch{throw new Error("El servidor no devolvió JSON. HTTP "+r.status)}if(!r.ok||data.status!=="ok")throw new Error(data.message||"Error HTTP "+r.status);smRenderRows(data.data||[]);status.textContent="Smart Money terminado · "+(data.data||[]).length+" símbolos"}catch(e){console.error("SMART MONEY ERROR:",e);status.textContent="ERROR: "+e.message;rows.innerHTML=`<tr><td colspan="12" class="red">${smEscape(e.message)}</td></tr>`}
+  status.textContent="Analizando Smart Money...";rows.innerHTML='<tr><td colspan="15" class="loading">Consultando datos...</td></tr>';
+  try{const r=await fetch(SM_API+"?symbols="+encodeURIComponent(symbols.join(","))+"&detail=0&_="+Date.now(),{cache:"no-store"});const text=await r.text();let data;try{data=JSON.parse(text)}catch{throw new Error("El servidor no devolvió JSON. HTTP "+r.status)}if(!r.ok||data.status!=="ok")throw new Error(data.message||"Error HTTP "+r.status);smRenderRows(data.data||[]);status.textContent="Smart Money terminado · "+(data.data||[]).length+" símbolos"}catch(e){console.error("SMART MONEY ERROR:",e);status.textContent="ERROR: "+e.message;rows.innerHTML=`<tr><td colspan="15" class="red">${smEscape(e.message)}</td></tr>`}
 }
 
 async function smDetails(symbol){
   const status=document.getElementById("smStatus"),panel=document.getElementById("smDetail");if(!panel)return;status.textContent="Cargando detalles de "+symbol+"...";
-  try{const r=await fetch(SM_API+"?symbol="+encodeURIComponent(symbol)+"&detail=1&_="+Date.now(),{cache:"no-store"});const data=await r.json();if(!r.ok||data.status!=="ok")throw new Error(data.message||"No se pudieron cargar los detalles.");const x=Array.isArray(data.data)?data.data[0]:data.data;if(!x)throw new Error("No hay datos para "+symbol);const events=Array.isArray(x.events)?x.events:[];panel.classList.remove("hidden");panel.innerHTML=`<h3 class="section-title">${smEscape(symbol)} — Smart Money</h3><div class="summary"><span class="badge">SCORE: <b>${Number(x.score)||0}</b></span><span class="badge">INSIDERS: ${smBadge(x.insider?.signal)}</span><span class="badge">13F: ${smBadge(x.institutional?.signal)}</span><span class="badge">CONGRESO: ${smBadge(x.congress?.signal)}</span><span class="badge">UNUSUAL: ${smBadge(x.unusual?.signal)}</span><span class="badge">OPCIONES: ${smBadge(x.options?.signal||"OFF")}</span></div><p class="small">RVOL: ${Number(x.unusual?.rvol||0).toFixed(2)}x · Cambio 5D: ${Number(x.unusual?.priceChange||0).toFixed(2)}% · ${smEscape(x.unusual?.reason||"")}</p><div class="scroll"><table><thead><tr><th>FUENTE</th><th>FECHA</th><th>TIPO</th><th>ACTOR</th><th>ACCIÓN</th><th>VALOR</th></tr></thead><tbody>${events.length?events.map(e=>`<tr><td>${smEscape(e.source||"")}</td><td>${smEscape(e.date||"")}</td><td>${smEscape(e.type||"")}</td><td>${smEscape(e.actor||"")}</td><td>${smEscape(e.action||"")}</td><td>${smEscape(e.value||"")}</td></tr>`).join(""):'<tr><td colspan="6">Sin eventos detallados.</td></tr>'}</tbody></table></div><p class="small">Institucional: ${smEscape(x.institutional?.note||"")}</p><p class="small">Congreso: ${smEscape(x.congress?.note||"")}</p><p class="small">ETF: ${smEscape(x.etf?.note||"")}</p>`;status.textContent="Detalles cargados para "+symbol}catch(e){console.error("SMART MONEY DETAIL ERROR:",e);status.textContent="ERROR: "+e.message}
+  try{
+    const r=await fetch(SM_API+"?symbol="+encodeURIComponent(symbol)+"&detail=1&_="+Date.now(),{cache:"no-store"});
+    const data=await r.json(); if(!r.ok||data.status!=="ok")throw new Error(data.message||"No se pudieron cargar los detalles.");
+    const x=Array.isArray(data.data)?data.data[0]:data.data;if(!x)throw new Error("No hay datos para "+symbol);
+    const events=Array.isArray(x.events)?x.events:[];
+    panel.classList.remove("hidden");
+    panel.innerHTML=`<h3 class="section-title">${smEscape(symbol)} — RADAR DE CAPITAL</h3>
+      <div class="summary"><span class="badge">SCORE: <b>${Number(x.score)||0}</b></span><span class="badge">FLUJO: ${smBadge(x.flowDirection)}</span><span class="badge">CONFIANZA: ${smEscape(x.confluence?.confidence||"—")}</span><span class="badge">INSIDERS: ${smBadge(x.insider?.signal)}</span><span class="badge">13F: ${smBadge(x.institutional?.signal)}</span><span class="badge">CONGRESO: ${smBadge(x.congress?.signal)}</span><span class="badge">OPCIONES: ${smBadge(x.options?.signal||"OFF")}</span></div>
+      <p class="small"><b>Por qué:</b> ${smEscape((x.reasons||[]).join(" · "))}</p>
+      <p class="small">Market flow proxy: RVOL ${Number(x.marketFlow?.rvol||0).toFixed(2)}x · $Vol relativo ${Number(x.marketFlow?.dollarRel||0).toFixed(2)}x · 5D ${Number(x.marketFlow?.priceChange5D||0).toFixed(2)}% · ${smEscape(x.marketFlow?.note||"")}</p>
+      <div class="scroll"><table><thead><tr><th>FUENTE</th><th>FECHA</th><th>TIPO</th><th>ACTOR</th><th>ACCIÓN</th><th>VALOR</th><th>REPORTE</th></tr></thead><tbody>${events.length?events.map(e=>`<tr><td>${smEscape(e.source||"")}</td><td>${smEscape(e.date||"")}</td><td>${smEscape(e.type||"")}</td><td>${smEscape(e.actor||"")}</td><td>${smEscape(e.action||"")}</td><td>${smEscape(e.value||e.amount||"")}</td><td>${smEscape(e.filingDate||"")}</td></tr>`).join(""):'<tr><td colspan="7">Sin eventos detallados.</td></tr>'}</tbody></table></div>
+      <p class="small">13F: ${smEscape(x.institutional?.note||"")}</p><p class="small">Congreso: ${smEscape(x.congress?.note||"")}</p><p class="small">ETF: ${smEscape(x.etf?.note||"")}</p><p class="small">Calidad: ${smEscape(x.dataQuality||"")}</p>`;
+    status.textContent="Detalles cargados para "+symbol;
+  }catch(e){console.error("SMART MONEY DETAIL ERROR:",e);status.textContent="ERROR: "+e.message}
 }
-
 function smSleep(ms){return new Promise(r=>setTimeout(r,ms));}
 async function smScanUniverse(){
   const status=document.getElementById("smStatus"),rows=document.getElementById("smRows"),button=document.getElementById("smUniverse"),progressBar=document.getElementById("progressBar"),progressText=document.getElementById("progressText");
   if(!status||!rows||!button)return;
-  button.disabled=true;rows.innerHTML='<tr><td colspan="12" class="loading">Iniciando universo...</td></tr>';
+  button.disabled=true;rows.innerHTML='<tr><td colspan="15" class="loading">Iniciando universo...</td></tr>';
   const results=[];
   try{
     for(let i=0;i<SM_UNIVERSE.length;i++){
       const symbol=SM_UNIVERSE[i],completed=i+1;status.textContent=`Smart Money Universo · ${completed}/${SM_UNIVERSE.length} · ${symbol}`;
-      const r=await fetch(SM_API+"?symbol="+encodeURIComponent(symbol)+"&_="+Date.now(),{cache:"no-store"});const text=await r.text();let data;try{data=JSON.parse(text)}catch{throw new Error("El Worker no devolvió JSON para "+symbol+". HTTP "+r.status)}if(!r.ok||data.status!=="ok")throw new Error(data.message||"Error HTTP "+r.status+" para "+symbol);if(Array.isArray(data.data))results.push(...data.data);results.sort((a,b)=>(Number(b.score)||0)-(Number(a.score)||0));smRenderRows(results);if(progressBar)progressBar.style.width=(completed/SM_UNIVERSE.length*100)+"%";if(progressText)progressText.textContent=`Smart Money ${completed}/${SM_UNIVERSE.length}`;
+      const r=await fetch(SM_API+"?symbol="+encodeURIComponent(symbol)+"&detail=0&_="+Date.now(),{cache:"no-store"});const text=await r.text();let data;try{data=JSON.parse(text)}catch{throw new Error("El Worker no devolvió JSON para "+symbol+". HTTP "+r.status)}if(!r.ok||data.status!=="ok")throw new Error(data.message||"Error HTTP "+r.status+" para "+symbol);if(Array.isArray(data.data))results.push(...data.data);results.sort((a,b)=>(Number(b.score)||0)-(Number(a.score)||0));smRenderRows(results);if(progressBar)progressBar.style.width=(completed/SM_UNIVERSE.length*100)+"%";if(progressText)progressText.textContent=`Smart Money ${completed}/${SM_UNIVERSE.length}`;
       // Pausa corta para respetar límites de los proveedores sin bloquear un minuto por símbolo.
       if(i<SM_UNIVERSE.length-1)await smSleep(1500);
     }
     status.textContent="Smart Money Universo terminado · "+results.length+" símbolos";
-  }catch(e){console.error("SMART MONEY UNIVERSO ERROR:",e);status.textContent="ERROR: "+e.message;rows.innerHTML=`<tr><td colspan="12" class="red">${smEscape(e.message)}</td></tr>`}finally{button.disabled=false}
+  }catch(e){console.error("SMART MONEY UNIVERSO ERROR:",e);status.textContent="ERROR: "+e.message;rows.innerHTML=`<tr><td colspan="15" class="red">${smEscape(e.message)}</td></tr>`}finally{button.disabled=false}
 }
 window.smLoad=smLoad;window.smScanUniverse=smScanUniverse;window.smDetails=smDetails;console.log("SMART MONEY JS cargado correctamente.");
