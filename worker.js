@@ -196,8 +196,12 @@ export default {
         // aporta el nombre del emisor/compañía cuando se consulta cada CIK.
         const names={};
         const secMap = await secTickers(env);
-        const institutionalSnap = await institutionalSnapshot(env);
-        const data = await Promise.all(symbols.map(s => smartMoneyData(s,env,detail,institutionalSnap,names[s]||s,secMap)));
+        // 13F snapshot is expensive: fetch only when explicitly requested in detail mode.
+        const institutionalSnap = detail ? await institutionalSnapshot(env) : [];
+        const data = [];
+        for (const s of symbols) {
+          data.push(await smartMoneyData(s,env,detail,institutionalSnap,names[s]||s,secMap));
+        }
         return json({status:"ok",data,generatedAt:new Date().toISOString(),sources:{sec:true,marketHistoryFallbacks:["Stooq","Yahoo Finance","Twelve Data"],institutional13F:true,congress:Boolean(env.QUIVER_API_KEY||env.CONGRESS_API_URL),etf:Boolean(env.ETF_PROVIDER_URL||env.ETF_COMPOSITION_ENABLED==="true")}});
       }
 if (url.pathname === "/api") {
@@ -276,7 +280,7 @@ if (url.pathname === "/api") {
           providersTried: ["Stooq", "Yahoo Finance", "Twelve Data"]
         }, 502);
       }
-      return json({ status: "ok", service: "Weekly Range Scanner PRO", build: "20260927-smartflow-subrequest-fix-v4", endpoints: ["/health", "/universe", "/api?symbol=NVDA", "/api?symbols=NVDA,META,AMZN"] });
+      return json({ status: "ok", service: "Weekly Range Scanner PRO", build: "20260927-smartflow-subrequest-fix-v5", endpoints: ["/health", "/universe", "/api?symbol=NVDA", "/api?symbols=NVDA,META,AMZN"] });
     } catch (error) {
       return json({ status: "error", message: error?.message || String(error) }, 500);
     }
