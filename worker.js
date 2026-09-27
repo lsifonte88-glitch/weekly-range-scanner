@@ -126,6 +126,23 @@ async function stooqTimeSeries(symbols){
   return out;
 }
 
+async function smartHistory(symbol, env, minBars=25){
+  try{
+    const s=await stooqOne(symbol);
+    if(Array.isArray(s.values)&&s.values.length>=minBars) return {values:s.values,source:"Stooq"};
+  }catch(_){}
+  try{
+    const y=await yahooOne(symbol);
+    if(Array.isArray(y.values)&&y.values.length>=minBars) return {values:y.values,source:"Yahoo Finance"};
+  }catch(_){}
+  try{
+    const r=await td("/time_series?symbol="+encodeURIComponent(symbol)+"&interval=1day&outputsize=90&order=desc&timezone=America/New_York",env);
+    const v=Array.isArray(r.data?.values)?r.data.values.slice().reverse().map(x=>({datetime:x.datetime||"",open:Number(x.open)||0,high:Number(x.high)||0,low:Number(x.low)||0,close:Number(x.close)||0,volume:Number(x.volume)||0})):Array.isArray(r.data)?r.data:[];
+    if(v.length>=minBars) return {values:v,source:"Twelve Data"};
+  }catch(_){}
+  return {values:[],source:"Unavailable"};
+}
+
 
 async function marketMovers(env, market, direction) {
   const r = await td("/market_movers/" + market + "?direction=" + direction + "&outputsize=50&country=USA", env);
@@ -183,7 +200,7 @@ export default {
         const secMap = await secTickers(env);
         const institutionalSnap = await institutionalSnapshot(env);
         const data = await Promise.all(symbols.map(s => smartMoneyData(s,env,detail,institutionalSnap,names[s]||s,secMap)));
-        return json({status:"ok",data,generatedAt:new Date().toISOString(),sources:{sec:true,twelveData:true,institutional13F:true,congress:Boolean(env.QUIVER_API_KEY||env.CONGRESS_API_URL),etf:Boolean(env.ETF_PROVIDER_URL||env.ETF_COMPOSITION_ENABLED==="true")}});
+        return json({status:"ok",data,generatedAt:new Date().toISOString(),sources:{sec:true,marketHistoryFallbacks:["Stooq","Yahoo Finance","Twelve Data"],institutional13F:true,congress:Boolean(env.QUIVER_API_KEY||env.CONGRESS_API_URL),etf:Boolean(env.ETF_PROVIDER_URL||env.ETF_COMPOSITION_ENABLED==="true")}});
       }
 if (url.pathname === "/api") {
         const requestedSymbols = cleanSymbols(url.searchParams.get("symbols") || url.searchParams.get("symbol"));
@@ -261,7 +278,7 @@ if (url.pathname === "/api") {
           providersTried: ["Stooq", "Yahoo Finance", "Twelve Data"]
         }, 502);
       }
-      return json({ status: "ok", service: "Weekly Range Scanner PRO", build: "20260927-smartflow", endpoints: ["/health", "/universe", "/api?symbol=NVDA", "/api?symbols=NVDA,META,AMZN"] });
+      return json({ status: "ok", service: "Weekly Range Scanner PRO", build: "20260927-smartflow-fallback-v2", endpoints: ["/health", "/universe", "/api?symbol=NVDA", "/api?symbols=NVDA,META,AMZN"] });
     } catch (error) {
       return json({ status: "error", message: error?.message || String(error) }, 500);
     }
@@ -400,11 +417,51 @@ function institutionalForName(name,snap,detail=false){
     }
   }
   const value=events.reduce((s,e)=>s+Number(e.value||0),0);
-  return {signal:events.length?"HOLDING":"NEUTRAL",filers:new Set(events.map(e=>e.actor)).size,value,events:detail?events.slice(0,20):[],note:events.length?"Latest SEC 13F holdings; quarterly and not real-time.":"No matching 13F holding found in the configured manager sample."};
+  return {signal:events.length?"HOLDING":"NEUTRAL",score:0,filers:new Set(events.map(e=>e.actor)).size,value,events:detail?events.slice(0,20):[],note:events.length?"Posición declarada en el último 13F disponible; no implica compra reciente.":"No matching 13F holding found in the configured manager sample."};
 }
 
-async function optionsFlowData(symbol,env){try{const ex=await td('/options/expiration?symbol='+encodeURIComponent(symbol),env);const dates=ex.data?.dates||ex.data?.values||ex.data?.data||[];const expiration=dates.map(x=>typeof x==='string'?x:(x.expiration_date||x.date||x.expiration)).filter(Boolean).sort()[0];if(!expiration)return {enabled:false,signal:'OFF',note:ex.data?.message||'Sin expiración de opciones disponible.'};const r=await td('/options/chain?symbol='+encodeURIComponent(symbol)+'&expiration_date='+encodeURIComponent(expiration),env);const raw=r.data?.options||r.data?.data||r.data?.values||r.data?.result||[];const rows=Array.isArray(raw)?raw:(raw&&typeof raw==='object'?Object.values(raw).flat():[]);let callVolume=0,putVolume=0,callOI=0,putOI=0;for(const x of rows){const side=String(x.side||x.type||x.option_type||x.contract_type||'').toUpperCase(),vol=Number(x.volume??x.trade_volume??0)||0,oi=Number(x.open_interest??x.openInterest??x.oi??0)||0;if(side==='CALL'||side.includes('CALL')){callVolume+=vol;callOI+=oi}else if(side==='PUT'||side.includes('PUT')){putVolume+=vol;putOI+=oi}}const ratio=putVolume?callVolume/putVolume:null,oiRatio=putOI?callOI/putOI:null;let signal='NEUTRAL';if(ratio!=null&&ratio>=1.5&&oiRatio!=null&&oiRatio>=1)signal='CALL_HEAVY';else if(ratio!=null&&ratio<=.67&&oiRatio!=null&&oiRatio<=1)signal='PUT_HEAVY';else if(ratio!=null&&ratio>=1.75)signal='CALL_HEAVY';else if(ratio!=null&&ratio<=.57)signal='PUT_HEAVY';return {enabled:true,signal,expiration,contracts:rows.length,callVolume,putVolume,callOpenInterest:callOI,putOpenInterest:putOI,callPutRatio:ratio,callPutOIRatio:oiRatio,note:'Twelve Data options chain; primera expiración disponible',asOf:new Date().toISOString()}}catch(e){return {enabled:false,signal:'ERROR',note:'Opciones no disponibles: '+e.message}}}
-
+async function yahooOptionsFlow(symbol,env,detail=false){
+  try{
+    const url="https://query2.finance.yahoo.com/v7/finance/options/"+encodeURIComponent(symbol);
+    const r=await fetch(url,{headers:{accept:"application/json","user-agent":"Mozilla/5.0"}});
+    if(!r.ok)return null;
+    const j=await r.json();
+    const result=j?.optionChain?.result?.[0];
+    const opt=result?.options?.[0];
+    const calls=Array.isArray(opt?.calls)?opt.calls:[], puts=Array.isArray(opt?.puts)?opt.puts:[];
+    if(!calls.length&&!puts.length)return null;
+    const sum=(a,k)=>a.reduce((s,x)=>s+(Number(x?.[k])||0),0);
+    const callVolume=sum(calls,"volume"),putVolume=sum(puts,"volume"),callOI=sum(calls,"openInterest"),putOI=sum(puts,"openInterest");
+    const ratio=putVolume?callVolume/putVolume:null, oiRatio=putOI?callOI/putOI:null;
+    let signal="NEUTRAL";
+    if(ratio!=null&&ratio>=1.5)signal="CALL_HEAVY"; else if(ratio!=null&&ratio<=0.67)signal="PUT_HEAVY";
+    return {enabled:true,signal,expiration:new Date((Number(result.expirationDates?.[0])||0)*1000).toISOString().slice(0,10),contracts:calls.length+puts.length,callVolume,putVolume,callOpenInterest:callOI,putOpenInterest:putOI,callPutRatio:ratio,callPutOIRatio:oiRatio,source:"Yahoo Finance",note:"Options chain; volumen y open interest, no distingue apertura/cierre.",asOf:new Date().toISOString()};
+  }catch(_){return null}
+}
+async function optionsFlowData(symbol,env){
+  try{
+    const ex=await td('/options/expiration?symbol='+encodeURIComponent(symbol),env);
+    const dates=ex.data?.dates||ex.data?.values||ex.data?.data||[];
+    const expiration=dates.map(x=>typeof x==='string'?x:(x.expiration_date||x.date||x.expiration)).filter(Boolean).sort()[0];
+    if(expiration){
+      const r=await td('/options/chain?symbol='+encodeURIComponent(symbol)+'&expiration_date='+encodeURIComponent(expiration),env);
+      const raw=r.data?.options||r.data?.data||r.data?.values||r.data?.result||[];
+      const rows=Array.isArray(raw)?raw:(raw&&typeof raw==='object'?Object.values(raw).flat():[]);
+      let callVolume=0,putVolume=0,callOI=0,putOI=0;
+      for(const x of rows){
+        const side=String(x.side||x.type||x.option_type||x.contract_type||'').toUpperCase(),vol=Number(x.volume??x.trade_volume??0)||0,oi=Number(x.open_interest??x.openInterest??x.oi??0)||0;
+        if(side==='CALL'||side.includes('CALL')){callVolume+=vol;callOI+=oi}
+        else if(side==='PUT'||side.includes('PUT')){putVolume+=vol;putOI+=oi}
+      }
+      if(callVolume+putVolume+callOI+putOI>0){
+        const ratio=putVolume?callVolume/putVolume:null,oiRatio=putOI?callOI/putOI:null;
+        let signal='NEUTRAL'; if(ratio!=null&&ratio>=1.5)signal='CALL_HEAVY'; else if(ratio!=null&&ratio<=.67)signal='PUT_HEAVY';
+        return {enabled:true,signal,expiration,contracts:rows.length,callVolume,putVolume,callOpenInterest:callOI,putOpenInterest:putOI,callPutRatio:ratio,callPutOIRatio:oiRatio,source:"Twelve Data",note:"Options chain; volumen y open interest, no distingue apertura/cierre.",asOf:new Date().toISOString()};
+      }
+    }
+  }catch(_){}
+  return await yahooOptionsFlow(symbol,env);
+}
 function avg(values){const a=(values||[]).map(Number).filter(Number.isFinite);return a.length?a.reduce((s,v)=>s+v,0)/a.length:0;}
 function pct(current,previous){const c=Number(current),p=Number(previous);return Number.isFinite(c)&&Number.isFinite(p)&&p!==0?((c/p)-1)*100:0;}
 function unusualSignal(v){
@@ -422,13 +479,14 @@ function unusualSignal(v){
   s=Math.max(-100,Math.min(100,s));
   return {signal:s>=35?"UNUSUAL_UP":s<=-20?"UNUSUAL_DOWN":"NORMAL",score:s,rvol:rv,volumeChange:dv,priceChange:p5,priceChange20:p20,reason:why.join(" · ")||"Sin anomalía de volumen relevante"};
 }
-async function unusualData(symbol,env){
-  try{
-    const r=await td("/time_series?symbol="+encodeURIComponent(symbol)+"&interval=1day&outputsize=25&order=desc&timezone=America/New_York",env);
-    if(r.httpStatus!==200||r.data?.status==="error")return {signal:"NEUTRAL",score:0,error:r.data?.message||"Twelve Data error"};
-    const v=Array.isArray(r.data?.values)?r.data.values.slice().reverse().map(x=>({open:Number(x.open),high:Number(x.high),low:Number(x.low),close:Number(x.close),volume:Number(x.volume)})):Array.isArray(r.data)?r.data:[];
-    return unusualSignal(v);
-  }catch(e){return {signal:"NEUTRAL",score:0,error:e.message};}
+function unusualFromValues(v,source){
+  const out=unusualSignal(v);
+  return {...out,source,asOf:(v?.at(-1)?.datetime||"")};
+}
+async function unusualData(symbol,env,history=null){
+  const h=history||await smartHistory(symbol,env,25);
+  if(!h.values.length)return {signal:"UNAVAILABLE",score:0,rvol:0,source:h.source,note:"No hay histórico disponible"};
+  return unusualFromValues(h.values.slice(-25),h.source);
 }
 async function providerGet(url,env,headers={}){
   if(!url)return null;
@@ -468,22 +526,21 @@ async function etfData(symbol,env,detail=false){
   }catch(e){return {signal:"NEUTRAL",holdings:[],note:e.message};}
 }
 
-async function marketFlowData(symbol,env){
-  try{
-    const r=await td("/time_series?symbol="+encodeURIComponent(symbol)+"&interval=1day&outputsize=60&order=desc&timezone=America/New_York",env);
-    if(r.httpStatus!==200||r.data?.status==="error")return {signal:"UNAVAILABLE",score:0,note:r.data?.message||"Market flow unavailable"};
-    const v=(r.data?.values||[]).slice().reverse().map(x=>({open:Number(x.open)||0,close:Number(x.close)||0,volume:Number(x.volume)||0}));
-    if(v.length<22)return {signal:"UNAVAILABLE",score:0,note:"Insufficient history"};
-    const last=v.at(-1), prev=v.slice(0,-1), av=avg(prev.slice(-20).map(x=>x.volume)), rvol=av?last.volume/av:0;
-    const dollar=last.close*last.volume, adv=avg(prev.slice(-20).map(x=>x.close*x.volume)), dollarRel=adv?dollar/adv:0;
-    const p5=pct(last.close,v.at(-6)?.close), p20=pct(last.close,v.at(-21)?.close);
-    const upVol=v.slice(-20).filter(x=>x.close>x.open).reduce((s,x)=>s+x.volume,0), downVol=v.slice(-20).filter(x=>x.close<x.open).reduce((s,x)=>s+x.volume,0);
-    const imbalance=(upVol+downVol)?(upVol-downVol)/(upVol+downVol):0;
-    let score=0; score += p5>0?1:-1; score += p20>0?1:-1; score += imbalance>0.12?1:imbalance<-0.12?-1:0; score += rvol>=1.5?(p5>=0?1:-1):0;
-    score=Math.max(-4,Math.min(4,score));
-    const signal=score>=3?"STRONG_INFLOW":score>=1?"INFLOW":score<=-3?"STRONG_OUTFLOW":score<=-1?"OUTFLOW":"ABNORMAL_ACTIVITY";
-    return {signal,score,rvol,dollarRel,priceChange5D:p5,priceChange20D:p20,volumeImbalance:imbalance,note:"Proxy de flujo de mercado: precio + volumen; no identifica por sí solo al comprador institucional."};
-  }catch(e){return {signal:"UNAVAILABLE",score:0,note:e.message}}
+function marketFlowFromValues(v,source){
+  if(!Array.isArray(v)||v.length<22)return {signal:"UNAVAILABLE",score:0,note:"Insufficient history",source};
+  const last=v.at(-1), prev=v.slice(0,-1), av=avg(prev.slice(-20).map(x=>x.volume)), rvol=av?last.volume/av:0;
+  const dollar=last.close*last.volume, adv=avg(prev.slice(-20).map(x=>x.close*x.volume)), dollarRel=adv?dollar/adv:0;
+  const p5=pct(last.close,v.at(-6)?.close), p20=pct(last.close,v.at(-21)?.close);
+  const upVol=v.slice(-20).filter(x=>x.close>x.open).reduce((s,x)=>s+x.volume,0), downVol=v.slice(-20).filter(x=>x.close<x.open).reduce((s,x)=>s+x.volume,0);
+  const imbalance=(upVol+downVol)?(upVol-downVol)/(upVol+downVol):0;
+  let score=0; score += p5>0?1:-1; score += p20>0?1:-1; score += imbalance>0.12?1:imbalance<-0.12?-1:0; score += rvol>=1.5?(p5>=0?1:-1):0;
+  score=Math.max(-4,Math.min(4,score));
+  const signal=score>=3?"STRONG_INFLOW":score>=1?"INFLOW":score<=-3?"STRONG_OUTFLOW":score<=-1?"OUTFLOW":"ABNORMAL_ACTIVITY";
+  return {signal,score,rvol,dollarRel,priceChange5D:p5,priceChange20D:p20,volumeImbalance:imbalance,source,asOf:last.datetime||"",note:"Proxy precio + volumen; no identifica por sí solo al comprador institucional."};
+}
+async function marketFlowData(symbol,env,history=null){
+  const h=history||await smartHistory(symbol,env,25);
+  return marketFlowFromValues(h.values,h.source);
 }
 function confluenceScore(parts){
   const vals=[parts.market,parts.insider,parts.institutional,parts.congress,parts.options].filter(Number.isFinite);
@@ -498,8 +555,9 @@ async function smartMoneyData(symbol,env,detail=false,institutionalSnap=[],issue
   if(cik) insider=await insiderData(symbol,cik,env,detail);
   const institutional=institutionalForName(issuerName||symbol,institutionalSnap,detail);
   const congress=await congressData(symbol,env,detail);
-  const unusual=await unusualData(symbol,env);
-  const marketFlow=await marketFlowData(symbol,env);
+  const history=await smartHistory(symbol,env,25);
+  const unusual=unusualData(symbol,env,history);
+  const marketFlow=marketFlowData(symbol,env,history);
   const options=await optionsFlowData(symbol,env);
   const isEtf=Boolean(issuerName && /ETF|TRUST|FUND/i.test(issuerName)) || /^(SPY|QQQ|QQQM|IWM|DIA|XLF|XLK|VOO|VTI|SMH|SOXX|ARKK|TQQQ|SQQQ|SOXL|SOXS)$/i.test(symbol);
   const etf=isEtf?await etfData(symbol,env,detail):{signal:"N/A",holdings:[],note:"No es ETF o no aplica."};
@@ -507,7 +565,7 @@ async function smartMoneyData(symbol,env,detail=false,institutionalSnap=[],issue
   const component={
     market:marketFlow.score||0,
     insider:insider.signal==="BUY"?2:insider.signal==="SELL"?-2:0,
-    institutional:institutional.signal==="HOLDING"?0:0,
+    institutional:Number(institutional.score||0),
     congress:congress.signal==="BUY"?1:congress.signal==="SELL"?-1:0,
     options:options.signal==="CALL_HEAVY"?1:options.signal==="PUT_HEAVY"?-1:0
   };
@@ -516,8 +574,8 @@ async function smartMoneyData(symbol,env,detail=false,institutionalSnap=[],issue
   score += unusual.score>0?Math.min(10,Math.round(unusual.score/5)):Math.max(-10,Math.round(unusual.score/5));
   score=Math.max(0,Math.min(100,Math.round(score)));
   const flowDirection=confluence.direction==="INFLOW"?"INFLOW":confluence.direction==="OUTFLOW"?"OUTFLOW":marketFlow.signal;
-  const freshness={market:"LIVE",insider:cik?"RECENT":"UNAVAILABLE",institutional:institutional.filers?"LAGGED":"UNAVAILABLE",congress:congress.count?"LAGGED":"UNAVAILABLE",options:options.enabled?"RECENT":"UNAVAILABLE"};
-  const dataQuality=[cik?"SEC insider":"sin SEC insider",institutional.filers?institutional.filers+" institucionales":"sin match 13F",congress.count?congress.count+" Congreso":"sin Congreso",options.enabled?"opciones OK":"sin opciones",marketFlow.signal!=="UNAVAILABLE"?"market flow OK":"sin market flow"].join(" · ");
+  const freshness={market:marketFlow.source==="Unavailable"?"UNAVAILABLE":"DAILY",insider:cik?"RECENT":"UNAVAILABLE",institutional:institutional.filers?"LAGGED":"UNAVAILABLE",congress:congress.count?"LAGGED":"UNAVAILABLE",options:options.enabled?"RECENT":"UNAVAILABLE"};
+  const dataQuality=[cik?"SEC insider":"sin SEC insider",institutional.filers?institutional.filers+" 13F":"sin match 13F",congress.count?congress.count+" Congreso":"sin Congreso",options.enabled?"opciones OK":"sin opciones",marketFlow.signal!=="UNAVAILABLE"?"market flow "+marketFlow.source:"sin market flow"].join(" · ");
   const reasons=[];
   if(marketFlow.rvol>=1.5) reasons.push("RVOL "+marketFlow.rvol.toFixed(2)+"x");
   if(marketFlow.signal==="STRONG_INFLOW") reasons.push("flujo precio/volumen fuerte al alza");
