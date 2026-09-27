@@ -278,7 +278,7 @@ if (url.pathname === "/api") {
           providersTried: ["Stooq", "Yahoo Finance", "Twelve Data"]
         }, 502);
       }
-      return json({ status: "ok", service: "Weekly Range Scanner PRO", build: "20260927-smartflow-fallback-v2", endpoints: ["/health", "/universe", "/api?symbol=NVDA", "/api?symbols=NVDA,META,AMZN"] });
+      return json({ status: "ok", service: "Weekly Range Scanner PRO", build: "20260927-smartflow-institutional-delta-v3", endpoints: ["/health", "/universe", "/api?symbol=NVDA", "/api?symbols=NVDA,META,AMZN"] });
     } catch (error) {
       return json({ status: "error", message: error?.message || String(error) }, 500);
     }
@@ -357,13 +357,15 @@ function nameMatches(a,b){
   let hit=0; for(const w of xa) if(ya.has(w)) hit++;
   return hit>=Math.min(3,Math.max(2,Math.ceil(Math.min(xa.size,ya.size)*0.6)));
 }
-async function sec13fLatest(cik,env){
+async function sec13fRecent(cik,env,limit=2){
   const sub=await secFetch(SEC+"/submissions/CIK"+String(cik).padStart(10,"0")+".json",env);
-  if(sub.status!==200)return null;
-  const j=JSON.parse(sub.text), r=j.filings?.recent||{};
-  for(let i=0;i<(r.form||[]).length;i++){
+  if(sub.status!==200)return [];
+  const j=JSON.parse(sub.text), r=j.filings?.recent||{}, out=[], seen=new Set();
+  for(let i=0;i<(r.form||[]).length && out.length<limit;i++){
     if(r.form[i]!=="13F-HR")continue;
-    const acc=r.accessionNumber[i], filingDate=r.filingDate[i], reportDate=r.reportDate?.[i]||"";
+    const reportDate=r.reportDate?.[i]||"";
+    if(!reportDate||seen.has(reportDate))continue;
+    const acc=r.accessionNumber[i], filingDate=r.filingDate[i];
     const base=SEC_WWW+"/Archives/edgar/data/"+String(Number(cik))+"/"+acc.replaceAll("-","");
     const idx=await secFetch(base+"/index.json",env);
     let info="";
@@ -381,9 +383,10 @@ async function sec13fLatest(cik,env){
     if(!info)continue;
     const doc=await secFetch(base+"/"+info,env);
     if(doc.status!==200)continue;
-    return {cik,manager:j.name||"Institutional manager",filingDate,reportDate,accession:acc,url:base+"/"+info,xml:doc.text};
+    seen.add(reportDate);
+    out.push({cik,manager:j.name||"Institutional manager",filingDate,reportDate,accession:acc,url:base+"/"+info,xml:doc.text,rows:parse13f(doc.text)});
   }
-  return null;
+  return out;
 }
 function parse13f(xml){
   const rows=[...String(xml||"").matchAll(/<(?:ns1:)?infoTable\b[^>]*>([\s\S]*?)<\/(?:ns1:)?infoTable>/gi)].map(m=>m[1]);
@@ -399,25 +402,41 @@ function parse13f(xml){
 async function institutionalSnapshot(env){
   const out=[];
   for(const m of INSTITUTIONAL_MANAGERS){
-    const x=await sec13fLatest(m.cik,env);
-    if(!x)continue;
-    out.push({...x,rows:parse13f(x.xml)});
+    const x=await sec13fRecent(m.cik,env,2);
+    if(x.length)out.push(...x);
   }
   return out;
 }
 function institutionalForName(name,snap,detail=false){
-  const events=[];
+  const byManager={};
   for(const m of snap||[]){
     const matches=(m.rows||[]).filter(r=>nameMatches(r.issuer,name));
-    for(const r of matches){
-      events.push({
-        source:"SEC 13F",type:"INSTITUTIONAL",actor:m.manager,action:r.putCall==="PUT"?"PUT":r.putCall==="CALL"?"CALL":"HOLDING",
-        date:m.reportDate,filingDate:m.filingDate,value:r.value,shares:r.shares,issuer:r.issuer,url:m.url
-      });
-    }
+    if(!matches.length)continue;
+    const key=m.manager||m.cik;
+    if(!byManager[key])byManager[key]=[];
+    byManager[key].push({...m,matches});
   }
-  const value=events.reduce((s,e)=>s+Number(e.value||0),0);
-  return {signal:events.length?"HOLDING":"NEUTRAL",score:0,filers:new Set(events.map(e=>e.actor)).size,value,events:detail?events.slice(0,20):[],note:events.length?"Posición declarada en el último 13F disponible; no implica compra reciente.":"No matching 13F holding found in the configured manager sample."};
+  const events=[], managers=[];
+  let score=0;
+  for(const [manager,arr] of Object.entries(byManager)){
+    arr.sort((a,b)=>String(b.reportDate).localeCompare(String(a.reportDate)));
+    const latest=arr[0], previous=arr[1];
+    const cur=latest.matches.reduce((s,r)=>s+Number(r.value||0),0);
+    const prev=previous?previous.matches.reduce((s,r)=>s+Number(r.value||0),0):0;
+    let action="HOLDING", delta=0;
+    if(!previous){ action=cur>0?"NEW":"HOLDING"; }
+    else if(cur===0&&prev>0){ action="EXITED"; delta=-prev; }
+    else if(cur>prev*1.10){ action=prev>0?"INCREASED":"NEW"; delta=cur-prev; }
+    else if(cur<prev*0.90){ action=cur>0?"DECREASED":"EXITED"; delta=cur-prev; }
+    else { action="HOLDING"; delta=cur-prev; }
+    if(action==="INCREASED"||action==="NEW")score+=1;
+    if(action==="DECREASED"||action==="EXITED")score-=1;
+    managers.push({manager,action,currentValue:cur,previousValue:prev,delta,reportDate:latest.reportDate,previousReportDate:previous?.reportDate||""});
+    const baseEvent={source:"SEC 13F",type:"INSTITUTIONAL",actor:manager,action,date:latest.reportDate,filingDate:latest.filingDate,value:cur,previousValue:prev,delta,issuer:latest.matches[0].issuer,url:latest.url};
+    events.push(baseEvent);
+  }
+  const signal=score>0?"BUY":score<0?"SELL":events.length?"HOLDING":"NEUTRAL";
+  return {signal,score,filers:managers.length,value:managers.reduce((s,m)=>s+m.currentValue,0),managers,events:detail?events.slice(0,20):[],note:events.length?"Cambio vs. 13F anterior; 13F sigue siendo un dato con rezago, no flujo en tiempo real.":"No matching 13F holding found in the configured manager sample."};
 }
 
 async function yahooOptionsFlow(symbol,env,detail=false){
