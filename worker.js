@@ -192,17 +192,15 @@ export default {
         const symbols = cleanSymbols(url.searchParams.get("symbols") || url.searchParams.get("symbol"));
         if (!symbols.length) return json({status:"error",message:"Falta symbol o symbols."},400);
         const detail = url.searchParams.get("detail")==="1";
-        // Evitamos una llamada adicional a Twelve Data: SEC submissions ya
-        // aporta el nombre del emisor/compañía cuando se consulta cada CIK.
-        const names={};
         const secMap = await secTickers(env);
-        // 13F snapshot is expensive: fetch only when explicitly requested in detail mode.
-        const institutionalSnap = detail ? await institutionalSnapshot(env) : [];
         const data = [];
-        for (const s of symbols) {
-          data.push(await smartMoneyData(s,env,detail,institutionalSnap,names[s]||s,secMap));
+        if (!detail) {
+          for (const s of symbols) data.push(await smartMoneyFastData(s,env,secMap));
+          return json({status:"ok",mode:"FAST_SUBREQUEST_SAFE",data,generatedAt:new Date().toISOString(),sources:{sec:true,marketHistory:"Stooq only",options:"Yahoo Finance",institutional13F:"deferred",congress:Boolean(env.QUIVER_API_KEY),etf:"deferred"}});
         }
-        return json({status:"ok",data,generatedAt:new Date().toISOString(),sources:{sec:true,marketHistoryFallbacks:["Stooq","Yahoo Finance","Twelve Data"],institutional13F:true,congress:Boolean(env.QUIVER_API_KEY||env.CONGRESS_API_URL),etf:Boolean(env.ETF_PROVIDER_URL||env.ETF_COMPOSITION_ENABLED==="true")}});
+        const institutionalSnap = await institutionalSnapshot(env);
+        for (const s of symbols) data.push(await smartMoneyData(s,env,true,institutionalSnap,s,secMap));
+        return json({status:"ok",mode:"DETAIL",data,generatedAt:new Date().toISOString(),sources:{sec:true,marketHistoryFallbacks:["Stooq","Yahoo Finance","Twelve Data"],institutional13F:true,congress:Boolean(env.QUIVER_API_KEY||env.CONGRESS_API_URL),etf:Boolean(env.ETF_PROVIDER_URL||env.ETF_COMPOSITION_ENABLED==="true")}});
       }
 if (url.pathname === "/api") {
         const requestedSymbols = cleanSymbols(url.searchParams.get("symbols") || url.searchParams.get("symbol"));
@@ -280,7 +278,7 @@ if (url.pathname === "/api") {
           providersTried: ["Stooq", "Yahoo Finance", "Twelve Data"]
         }, 502);
       }
-      return json({ status: "ok", service: "Weekly Range Scanner PRO", build: "20260927-smartflow-subrequest-fix-v5", endpoints: ["/health", "/universe", "/api?symbol=NVDA", "/api?symbols=NVDA,META,AMZN"] });
+      return json({ status: "ok", service: "Weekly Range Scanner PRO", build: "20260927-smartflow-fast-safe-v6", endpoints: ["/health", "/universe", "/api?symbol=NVDA", "/api?symbols=NVDA,META,AMZN"] });
     } catch (error) {
       return json({ status: "error", message: error?.message || String(error) }, 500);
     }
@@ -572,6 +570,62 @@ function confluenceScore(parts){
   const confidence=aligned+opposed<2?"LOW":(aligned>=3||opposed>=3)?"HIGH":"MEDIUM";
   return {raw:s,direction:s>=3?"INFLOW":s<=-3?"OUTFLOW":"MIXED",confidence,aligned,opposed};
 }
+async function smartMoneyFastData(symbol,env,secMap){
+  // FAST mode: bounded subrequests for Cloudflare Workers.
+  // Normal scans intentionally avoid 13F (lagged/expensive) and deep SEC filing history.
+  let insider={signal:"NEUTRAL",count:0,netValue:0,events:[],note:"Fast mode: SEC Form 4 details deferred."};
+  try{
+    const cik=secMap?.[symbol];
+    if(cik){
+      const sub=await secFetch(SEC+"/submissions/CIK"+cik+".json",env);
+      if(sub.status===200){
+        const j=JSON.parse(sub.text), r=j.filings?.recent||{};
+        const n=(r.form||[]).filter(x=>x==="4").length;
+        insider={signal:"NEUTRAL",count:n,netValue:0,events:[],note:n?"SEC: Form 4 recientes detectados; dirección detallada en modo detalle.":"SEC: sin Form 4 reciente."};
+      }
+    }
+  }catch(_){}
+  const history=await stooqOne(symbol);
+  const values=Array.isArray(history.values)&&history.values.length>=25?history.values:[];
+  const source=values.length?"Stooq":"Unavailable";
+  const marketFlow=marketFlowFromValues(values,source);
+  const unusual=values.length?unusualFromValues(values.slice(-25),source):{signal:"UNAVAILABLE",score:0,rvol:0,source,note:"No hay histórico Stooq disponible"};
+  const options=await yahooOptionsFlow(symbol,env,false) || {enabled:false,signal:"UNAVAILABLE",note:"Yahoo options no disponible"};
+  let congress={signal:"NEUTRAL",count:0,buys:0,sells:0,events:[],note:"Fast mode: Congreso diferido."};
+  if(env.QUIVER_API_KEY){
+    try{congress=await congressData(symbol,env,false);}catch(_){}
+  }
+  const component={
+    market:marketFlow.score||0,
+    insider:0,
+    institutional:0,
+    congress:congress.signal==="BUY"?1:congress.signal==="SELL"?-1:0,
+    options:options.signal==="CALL_HEAVY"?1:options.signal==="PUT_HEAVY"?-1:0
+  };
+  const confluence=confluenceScore(component);
+  let score=50+confluence.raw*7;
+  score += unusual.score>0?Math.min(10,Math.round(unusual.score/5)):Math.max(-10,Math.round(unusual.score/5));
+  score=Math.max(0,Math.min(100,Math.round(score)));
+  const flowDirection=confluence.direction==="INFLOW"?"INFLOW":confluence.direction==="OUTFLOW"?"OUTFLOW":marketFlow.signal;
+  const reasons=[];
+  if(marketFlow.rvol>=1.5) reasons.push("RVOL "+marketFlow.rvol.toFixed(2)+"x");
+  if(marketFlow.signal==="STRONG_INFLOW") reasons.push("flujo precio/volumen fuerte al alza");
+  if(marketFlow.signal==="STRONG_OUTFLOW") reasons.push("flujo precio/volumen fuerte a la baja");
+  if(options.signal==="CALL_HEAVY"||options.signal==="PUT_HEAVY") reasons.push("opciones "+options.signal);
+  if(congress.signal!=="NEUTRAL") reasons.push("Congreso "+congress.signal);
+  if(!reasons.length) reasons.push("sin confluencia direccional suficiente");
+  return {
+    symbol,score,flowDirection,marketFlow,confluence,reasons,insider,
+    institutional:{signal:"UNAVAILABLE",score:0,filers:0,managers:[],events:[],note:"Fast mode: 13F diferido; se consulta en detalle."},
+    congress,unusual,options,
+    etf:{signal:"N/A",holdings:[],note:"Fast mode: ETF composition diferida."},
+    technical:{signal:marketFlow.signal.includes("INFLOW")?"BULLISH_FLOW":marketFlow.signal.includes("OUTFLOW")?"BEARISH_FLOW":"MIXED"},
+    freshness:{market:source==="Unavailable"?"UNAVAILABLE":"DAILY",insider:insider.count?"RECENT":"RECENT",institutional:"DEFERRED",congress:congress.count?"LAGGED":"DEFERRED",options:options.enabled?"RECENT":"UNAVAILABLE"},
+    dataQuality:[source!=="Unavailable"?"market flow Stooq":"sin market flow","opciones "+(options.enabled?"Yahoo OK":"no disponibles"),"13F diferido","SEC Form 4 resumen"].join(" · "),
+    mode:"FAST_SUBREQUEST_SAFE",asOf:new Date().toISOString(),events:[]
+  };
+}
+
 async function smartMoneyData(symbol,env,detail=false,institutionalSnap=[],issuerName="",secMap=null){
   const map=secMap||await secTickers(env), cik=map[symbol];
   let insider={signal:"NEUTRAL",count:0,netValue:0,events:[],error:cik?null:"Ticker not found in SEC map"};
