@@ -267,10 +267,15 @@ export default {
         const symbols = cleanSymbols(url.searchParams.get("symbols") || url.searchParams.get("symbol"));
         if (!symbols.length) return json({status:"error",message:"Falta symbol o symbols."},400);
         const detail = url.searchParams.get("detail")==="1";
-        const secMap = await secTickers(env);
+        const secMap = null;
         const data = [];
         if (!detail) {
-          for (const s of symbols) data.push(await smartMoneyFastData(s,env,secMap));
+          const results=await Promise.allSettled(symbols.map(s=>smartMoneyFastData(s,env,null)));
+          for(let i=0;i<results.length;i++){
+            const r=results[i];
+            if(r.status==="fulfilled") data.push(r.value);
+            else data.push({symbol:symbols[i],score:50,flowDirection:"MIXED",marketFlow:{signal:"UNAVAILABLE",score:0,rvol:0,priceChange5D:0,dollarRel:0,note:"Proveedor no disponible en este ciclo"},confluence:{confidence:"BAJA"},reasons:["sin datos suficientes en este ciclo"],insider:{signal:"DEFERRED",count:0,netValue:0,note:"Diferido"},institutional:{signal:"DEFERRED",filers:0,note:"Diferido"},congress:{signal:"DEFERRED",count:0,note:"Diferido"},unusual:{signal:"UNAVAILABLE",score:0,rvol:0},options:{signal:"DEFERRED",enabled:false},etf:{signal:"DEFERRED"},dataQuality:"fallo aislado de proveedor",asOf:new Date().toISOString()});
+          }
           return json({status:"ok",mode:"FAST_SUBREQUEST_SAFE",data,generatedAt:new Date().toISOString(),sources:{sec:true,marketHistoryFallbacks:["Stooq","Yahoo Finance","Twelve Data"],options:"Yahoo Finance",institutional13F:"deferred",congress:Boolean(env.QUIVER_API_KEY),etf:"deferred"}});
         }
         const institutionalSnap = await institutionalSnapshot(env);
@@ -667,11 +672,8 @@ async function smartMoneyFastData(symbol,env,secMap){
   const source=values.length?(history.source||"Unavailable"):"Unavailable";
   const marketFlow=marketFlowFromValues(values,source);
   const unusual=values.length?unusualFromValues(values.slice(-25),source):{signal:"UNAVAILABLE",score:0,rvol:0,source,note:"No hay histórico disponible en los proveedores configurados"};
-  const options=await optionsFlowData(symbol,env);
-  let congress={signal:"NEUTRAL",count:0,buys:0,sells:0,events:[],note:"Fast mode: Congreso diferido."};
-  if(env.QUIVER_API_KEY){
-    try{congress=await congressData(symbol,env,false);}catch(_){}
-  }
+  const options={enabled:false,signal:"DEFERRED",expiration:"",contracts:0,callVolume:0,putVolume:0,callOpenInterest:0,putOpenInterest:0,callPutRatio:null,callPutOIRatio:null,source:"Deferred",note:"Opciones diferidas al detalle para mantener el radar rápido."};
+  const congress={signal:"DEFERRED",count:0,buys:0,sells:0,events:[],note:"Congreso diferido al detalle."};
   const component={
     market:marketFlow.score||0,
     insider:0,
