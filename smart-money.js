@@ -48,14 +48,10 @@ function smRenderRows(data){
   }).join("");
   document.querySelectorAll(".smDetailBtn").forEach(b=>b.addEventListener("click",()=>smDetails(b.dataset.symbol)));
 }
-async function smFetchJson(url,timeoutMs=12000){
-  const controller=new AbortController();
-  const timer=setTimeout(()=>controller.abort(),timeoutMs);
-  try{
-    const r=await fetch(url,{cache:"no-store",signal:controller.signal});
-    const j=await r.json();
-    return {ok:r.ok,json:j};
-  }finally{clearTimeout(timer)}
+async function smFetchJson(url){
+  const r=await fetch(url,{cache:"no-store"});
+  const j=await r.json();
+  return {ok:r.ok,json:j};
 }
 async function smLoad(){
   const input=document.getElementById("symbols"),status=document.getElementById("smStatus"),rows=document.getElementById("smRows");
