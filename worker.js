@@ -151,6 +151,32 @@ async function marketMovers(env, market, direction) {
   return { ok:true, values };
 }
 
+async function smartMoneyCandidates(env){
+  const [g,l,a]=await Promise.all([
+    marketMovers(env,"stocks","gainers"),
+    marketMovers(env,"stocks","losers"),
+    marketMovers(env,"stocks","most_active")
+  ]);
+  const buckets=[
+    ...(g.values||[]).map(x=>({...x,_bucket:"INFLOW"})),
+    ...(l.values||[]).map(x=>({...x,_bucket:"OUTFLOW"})),
+    ...(a.values||[]).map(x=>({...x,_bucket:"ACTIVE"}))
+  ];
+  const by=new Map();
+  for(const x of buckets){
+    const symbol=String(x.symbol||x.ticker||"").trim().toUpperCase();
+    if(!symbol||symbol==="MSFT"||!/^[A-Z0-9.-]+$/.test(symbol))continue;
+    const change=Math.abs(Number(x.percent_change??x.change_percent??x.change||0)||0);
+    const volume=Number(x.volume||x.average_volume||0)||0;
+    const score=change*2+(volume>0?Math.log10(volume):0);
+    const prev=by.get(symbol);
+    if(!prev||score>prev._score)by.set(symbol,{symbol,buckets:[],change,volume,_score:score});
+    const row=by.get(symbol); if(!row.buckets.includes(x._bucket))row.buckets.push(x._bucket);
+  }
+  const rows=[...by.values()].sort((a,b)=>b._score-a._score).slice(0,32);
+  return {symbols:rows.map(x=>x.symbol),candidates:rows.map(({symbol,buckets,change,volume})=>({symbol,buckets,change,volume}))};
+}
+
 async function universe(env) {
   const [stocks, etfs] = await Promise.all([td("/stocks?country=United%20States", env), td("/etf", env)]);
   let stockList = Array.isArray(stocks.data?.data) ? stocks.data.data : [];
@@ -172,7 +198,7 @@ export default {
         return new Response(await r.text(), { headers: { "content-type": "text/html; charset=UTF-8", "cache-control": "no-store" } });
       }
       if (url.pathname === "/smart-money.js") {
-        const r = await fetch("https://raw.githubusercontent.com/lsifonte88-glitch/weekly-range-scanner/main/smart-money.js?v=c23bc3ddb6eced83119c6abcbdc73ab5548453e4", { cf: { cacheTtl: 0 } });
+        const r = await fetch("https://raw.githubusercontent.com/lsifonte88-glitch/weekly-range-scanner/main/smart-money.js?v=df462a6a07eb94b59ef6f5df6ab902eabc2ef3d5", { cf: { cacheTtl: 0 } });
         if (!r.ok) return new Response("No se pudo cargar Smart Money.", { status: 502 });
         return new Response(await r.text(), { headers: { "content-type": "application/javascript; charset=UTF-8", "cache-control": "no-store" } });
       }
@@ -187,6 +213,11 @@ export default {
       if (url.pathname === "/universe") {
         const symbols = await universe(env);
         return json({ status: "ok", count: symbols.length, symbols, generatedAt: new Date().toISOString() }, 200, { "cache-control": "public, max-age=21600" });
+      }
+      if (url.pathname === "/smart-money-candidates") {
+        const out=await smartMoneyCandidates(env);
+        if(!out.symbols.length)return json({status:"error",message:"No se detectaron movimientos de mercado."},502);
+        return json({status:"ok",...out,generatedAt:new Date().toISOString(),source:"Twelve Data market movers",note:"Candidatos dinámicos: ganadores, perdedores y mayor actividad; no usa una lista fija ni recorre el universo completo."},200,{"cache-control":"no-store"});
       }
       if (url.pathname === "/smart-money") {
         const symbols = cleanSymbols(url.searchParams.get("symbols") || url.searchParams.get("symbol"));
