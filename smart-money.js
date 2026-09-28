@@ -48,24 +48,42 @@ function smRenderRows(data){
   }).join("");
   document.querySelectorAll(".smDetailBtn").forEach(b=>b.addEventListener("click",()=>smDetails(b.dataset.symbol)));
 }
+async function smFetchJson(url,timeoutMs=12000){
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),timeoutMs);
+  try{
+    const r=await fetch(url,{cache:"no-store",signal:controller.signal});
+    const j=await r.json();
+    return {ok:r.ok,json:j};
+  }finally{clearTimeout(timer)}
+}
 async function smLoad(){
   const input=document.getElementById("symbols"),status=document.getElementById("smStatus"),rows=document.getElementById("smRows");
   if(!input||!status||!rows)return;
   status.textContent="Detectando dónde se está moviendo el dinero ahora…";
   rows.innerHTML='<tr><td colspan="15" class="loading">Buscando ganadores, perdedores y mayor actividad del mercado…</td></tr>';
   try{
-    const d=await fetch(SM_API.replace("/smart-money","/smart-money-candidates")+"?_="+Date.now(),{cache:"no-store"});
-    const dj=await d.json();
-    if(!d.ok||(dj.status!=="ok"&&dj.estado!=="ok"))throw new Error(dj.message||dj.mensaje||"No se pudieron detectar candidatos.");
-    const rawCandidates=dj.symbols||dj["símbolos"]||[];
+    const candidatesUrl=SM_API.replace("/smart-money","/smart-money-candidates")+"?_="+Date.now();
+    let dj;
+    try{
+      const result=await smFetchJson(candidatesUrl,12000);
+      dj=result.json;
+      if(!result.ok||(dj.status!=="ok"&&dj.estado!=="ok"))throw new Error(dj.message||dj.mensaje||"No se pudieron detectar candidatos.");
+    }catch(_){
+      status.textContent="Radar: usando prefiltro de mercado…";
+      const fallback=await smFetchJson(SM_API.replace("/smart-money","/prefilter")+"?_="+Date.now(),12000);
+      dj=fallback.json;
+      if(!fallback.ok||dj.status!=="ok")throw new Error(dj.message||"No se pudieron detectar movimientos del mercado.");
+    }
+    const rawCandidates=dj.symbols||dj["símbolos"]||dj.symbols||[];
     const candidates=[...new Set(rawCandidates.map(x=>String(x).toUpperCase().replace(/[^A-Z0-9.\-]/g,"")).filter(Boolean))].slice(0,32);
     if(!candidates.length)throw new Error("El mercado no devolvió candidatos.");
     let all=[];
     for(let i=0;i<candidates.length;i+=8){
       const chunk=candidates.slice(i,i+8);
-      const r=await fetch(SM_API+"?symbols="+encodeURIComponent(chunk.join(","))+"&detail=0&_="+Date.now(),{cache:"no-store"});
-      const j=await r.json();
-      if(Array.isArray(j.data))all.push(...j.data);
+      const result=await smFetchJson(SM_API+"?symbols="+encodeURIComponent(chunk.join(","))+"&detail=0&_="+Date.now(),20000);
+      const j=result.json;
+      if(result.ok&&Array.isArray(j.data))all.push(...j.data);
       const pct=Math.min(100,Math.round((Math.min(i+8,candidates.length)/candidates.length)*100));
       status.textContent="Smart Money en tiempo real · analizando "+Math.min(i+8,candidates.length)+"/"+candidates.length+" candidatos ("+pct+"%)";
     }
