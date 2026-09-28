@@ -72,13 +72,18 @@ async function yahooOne(symbol) {
   return { symbol, values: [] };
 }
 async function yahooScreener(scrIds,count=250) {
-  try {
-    const url="https://query1.finance.yahoo.com/v1/finance/screener/predefined/saved?formatted=false&lang=en-US&region=US&scrIds="+encodeURIComponent(scrIds)+"&count="+count+"&corsDomain=finance.yahoo.com";
-    const r=await fetch(url,{headers:{accept:"application/json","user-agent":"Mozilla/5.0"}});
-    if(!r.ok)return [];
-    const j=await r.json();
-    return j?.finance?.result?.[0]?.quotes||[];
-  }catch(_){return []}
+  const hosts=["query1.finance.yahoo.com","query2.finance.yahoo.com"];
+  for(const host of hosts){
+    try{
+      const url="https://"+host+"/v1/finance/screener/predefined/saved?formatted=false&lang=en-US&region=US&scrIds="+encodeURIComponent(scrIds)+"&count="+count+"&corsDomain=finance.yahoo.com";
+      const r=await fetch(url,{headers:{accept:"application/json","user-agent":"Mozilla/5.0"}});
+      if(!r.ok)continue;
+      const j=await r.json();
+      const quotes=j?.finance?.result?.[0]?.quotes;
+      if(Array.isArray(quotes)&&quotes.length)return quotes;
+    }catch(_){ }
+  }
+  return [];
 }
 async function yahooMovers() {
   const sets=await Promise.all([
@@ -152,11 +157,13 @@ async function marketMovers(env, market, direction) {
 }
 
 async function smartMoneyCandidates(env){
-  const [g,l,a]=await Promise.all([
+  // Twelve Data solo documenta gainers/losers en /market_movers; most_active no es
+  // una dirección soportada. Primero intentamos los dos rankings válidos.
+  const [g,l]=await Promise.all([
     marketMovers(env,"stocks","gainers"),
-    marketMovers(env,"stocks","losers"),
-    marketMovers(env,"stocks","most_active")
+    marketMovers(env,"stocks","losers")
   ]);
+  const a={values:[]};
   const buckets=[
     ...(g.values||[]).map(x=>({...x,_bucket:"INFLOW"})),
     ...(l.values||[]).map(x=>({...x,_bucket:"OUTFLOW"})),
