@@ -66,7 +66,7 @@ async function smLoad(){
     const candidatesUrl=SM_API.replace("/smart-money","/smart-money-candidates")+"?_="+Date.now();
     let dj;
     try{
-      const result=await smFetchJson(candidatesUrl,12000);
+      const result=await smFetchJson(candidatesUrl,30000);
       dj=result.json;
       if(!result.ok||(dj.status!=="ok"&&dj.estado!=="ok"))throw new Error(dj.message||dj.mensaje||"No se pudieron detectar candidatos.");
     }catch(_){
@@ -81,7 +81,7 @@ async function smLoad(){
     let all=[];
     for(let i=0;i<candidates.length;i+=8){
       const chunk=candidates.slice(i,i+8);
-      const result=await smFetchJson(SM_API+"?symbols="+encodeURIComponent(chunk.join(","))+"&detail=0&_="+Date.now(),20000);
+      const result=await smFetchJson(SM_API+"?symbols="+encodeURIComponent(chunk.join(","))+"&detail=0&_="+Date.now(),30000);
       const j=result.json;
       if(result.ok&&Array.isArray(j.data))all.push(...j.data);
       const pct=Math.min(100,Math.round((Math.min(i+8,candidates.length)/candidates.length)*100));
