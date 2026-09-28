@@ -48,10 +48,10 @@ function smRenderRows(data){
   }).join("");
   document.querySelectorAll(".smDetailBtn").forEach(b=>b.addEventListener("click",()=>smDetails(b.dataset.symbol)));
 }
-async function smFetchJson(url){
-  const r=await fetch(url,{cache:"no-store"});
-  const j=await r.json();
-  return {ok:r.ok,json:j};
+async function smFetchJson(url,timeoutMs=20000){
+  const request=fetch(url,{cache:"no-store"}).then(async r=>({ok:r.ok,json:await r.json()}));
+  const timeout=new Promise((_,reject)=>setTimeout(()=>reject(new Error("Tiempo de espera agotado")),timeoutMs));
+  return await Promise.race([request,timeout]);
 }
 async function smLoad(){
   const input=document.getElementById("symbols"),status=document.getElementById("smStatus"),rows=document.getElementById("smRows");
@@ -62,7 +62,7 @@ async function smLoad(){
     const candidatesUrl=SM_API.replace("/smart-money","/smart-money-candidates")+"?_="+Date.now();
     let dj;
     try{
-      const result=await smFetchJson(candidatesUrl,30000);
+      const result=await smFetchJson(candidatesUrl,12000);
       dj=result.json;
       if(!result.ok||(dj.status!=="ok"&&dj.estado!=="ok"))throw new Error(dj.message||dj.mensaje||"No se pudieron detectar candidatos.");
     }catch(_){
@@ -77,7 +77,7 @@ async function smLoad(){
     let all=[];
     for(let i=0;i<candidates.length;i+=8){
       const chunk=candidates.slice(i,i+8);
-      const result=await smFetchJson(SM_API+"?symbols="+encodeURIComponent(chunk.join(","))+"&detail=0&_="+Date.now(),30000);
+      const result=await smFetchJson(SM_API+"?symbols="+encodeURIComponent(chunk.join(","))+"&detail=0&_="+Date.now(),20000);
       const j=result.json;
       if(result.ok&&Array.isArray(j.data))all.push(...j.data);
       const pct=Math.min(100,Math.round((Math.min(i+8,candidates.length)/candidates.length)*100));
