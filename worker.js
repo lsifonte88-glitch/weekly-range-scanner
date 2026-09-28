@@ -590,8 +590,8 @@ async function smartMoneyFastData(symbol,env,secMap){
   const values=Array.isArray(history.values)&&history.values.length>=25?history.values:[];
   const source=values.length?(history.source||"Unavailable"):"Unavailable";
   const marketFlow=marketFlowFromValues(values,source);
-  const unusual=values.length?unusualFromValues(values.slice(-25),source):{signal:"UNAVAILABLE",score:0,rvol:0,source,note:"No hay histórico Stooq disponible"};
-  const options=await yahooOptionsFlow(symbol,env,false) || {enabled:false,signal:"UNAVAILABLE",note:"Yahoo options no disponible"};
+  const unusual=values.length?unusualFromValues(values.slice(-25),source):{signal:"UNAVAILABLE",score:0,rvol:0,source,note:"No hay histórico disponible en los proveedores configurados"};
+  const options=await optionsFlowData(symbol,env);
   let congress={signal:"NEUTRAL",count:0,buys:0,sells:0,events:[],note:"Fast mode: Congreso diferido."};
   if(env.QUIVER_API_KEY){
     try{congress=await congressData(symbol,env,false);}catch(_){}
@@ -622,7 +622,7 @@ async function smartMoneyFastData(symbol,env,secMap){
     etf:{signal:"N/A",holdings:[],note:"Fast mode: ETF composition diferida."},
     technical:{signal:marketFlow.signal.includes("INFLOW")?"BULLISH_FLOW":marketFlow.signal.includes("OUTFLOW")?"BEARISH_FLOW":"MIXED"},
     freshness:{market:source==="Unavailable"?"UNAVAILABLE":"DAILY",insider:insider.count?"RECENT":"RECENT",institutional:"DEFERRED",congress:congress.count?"LAGGED":"DEFERRED",options:options.enabled?"RECENT":"UNAVAILABLE"},
-    dataQuality:[source!=="Unavailable"?"market flow Stooq":"sin market flow","opciones "+(options.enabled?"Yahoo OK":"no disponibles"),"13F diferido","SEC Form 4 resumen"].join(" · "),
+    dataQuality:[source!=="Unavailable"?"market flow "+source:"sin market flow","opciones "+(options.enabled?"Yahoo OK":"no disponibles"),"13F diferido","SEC Form 4 resumen"].join(" · "),
     mode:"FAST_SUBREQUEST_SAFE",asOf:new Date().toISOString(),events:[]
   };
 }
