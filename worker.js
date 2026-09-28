@@ -166,7 +166,7 @@ async function smartMoneyCandidates(env){
   for(const x of buckets){
     const symbol=String(x.symbol||x.ticker||"").trim().toUpperCase();
     if(!symbol||symbol==="MSFT"||!/^[A-Z0-9.-]+$/.test(symbol))continue;
-    const change=Math.abs(Number(x.percent_change??x.change_percent??x.change||0)||0);
+    const change=Math.abs(Number(x.percent_change ?? x.change_percent ?? x.change ?? 0) || 0);
     const volume=Number(x.volume||x.average_volume||0)||0;
     const score=change*2+(volume>0?Math.log10(volume):0);
     const prev=by.get(symbol);
