@@ -59,18 +59,13 @@ async function smLoad(){
   status.textContent="Detectando dónde se está moviendo el dinero ahora…";
   rows.innerHTML='<tr><td colspan="15" class="loading">Buscando ganadores, perdedores y mayor actividad del mercado…</td></tr>';
   try{
-    const candidatesUrl=SM_API.replace("/smart-money","/smart-money-candidates")+"?_="+Date.now();
     let dj;
-    try{
-      const result=await smFetchJson(candidatesUrl,12000);
-      dj=result.json;
-      if(!result.ok||(dj.status!=="ok"&&dj.estado!=="ok"))throw new Error(dj.message||dj.mensaje||"No se pudieron detectar candidatos.");
-    }catch(_){
-      status.textContent="Radar: usando prefiltro de mercado…";
-      const fallback=await smFetchJson(SM_API.replace("/smart-money","/prefilter")+"?_="+Date.now(),12000);
-      dj=fallback.json;
-      if(!fallback.ok||dj.status!=="ok")throw new Error(dj.message||"No se pudieron detectar movimientos del mercado.");
-    }
+    // Ruta crítica: /prefilter ya entrega ganadores, perdedores y mayor actividad
+    // dinámicamente. No hacemos depender el radar de un proveedor lento.
+    status.textContent="Radar: detectando movimientos del mercado…";
+    const fallback=await smFetchJson(SM_API.replace("/smart-money","/prefilter")+"?_="+Date.now(),10000);
+    dj=fallback.json;
+    if(!fallback.ok||dj.status!=="ok")throw new Error(dj.message||"No se pudieron detectar movimientos del mercado.");
     const rawCandidates=dj.symbols||dj["símbolos"]||dj.symbols||[];
     const candidates=[...new Set(rawCandidates.map(x=>String(x).toUpperCase().replace(/[^A-Z0-9.\-]/g,"")).filter(Boolean))].slice(0,32);
     if(!candidates.length)throw new Error("El mercado no devolvió candidatos.");
