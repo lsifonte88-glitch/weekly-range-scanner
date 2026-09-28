@@ -22,7 +22,7 @@ function json(body, status = 200, extraHeaders = {}) {
 async function td(path, env) {
   const url = new URL(TD + path);
   url.searchParams.set("apikey", env.TWELVE_DATA_API_KEY);
-  const response = await fetch(url, { method: "GET", headers: { accept: "application/json" } });
+  const response = await fetchWithTimeout(url, { method: "GET", headers: { accept: "application/json" } }, 5000);
   const data = await response.json();
   return {
     httpStatus: response.status,
@@ -30,6 +30,13 @@ async function td(path, env) {
     creditsUsed: response.headers.get("api-credits-used"),
     creditsLeft: response.headers.get("api-credits-left")
   };
+}
+
+async function fetchWithTimeout(url, options={}, timeoutMs=5000) {
+  const controller=new AbortController();
+  const timer=setTimeout(()=>controller.abort(),timeoutMs);
+  try { return await fetch(url,{...options,signal:controller.signal}); }
+  finally { clearTimeout(timer); }
 }
 
 function cleanSymbols(value) {
@@ -51,7 +58,7 @@ async function yahooOne(symbol) {
     try {
       const url = "https://" + host + "/v8/finance/chart/" + encodeURIComponent(symbol) +
         "?range=1y&interval=1d&events=history&includeAdjustedClose=true&includePrePost=false";
-      const r = await fetch(url, { headers: { accept: "application/json", "user-agent": "Mozilla/5.0" } });
+      const r = await fetchWithTimeout(url, { headers: { accept: "application/json", "user-agent": "Mozilla/5.0" } }, 3500);
       if (!r.ok) continue;
       const j = await r.json();
       const res = j?.chart?.result?.[0];
@@ -113,7 +120,7 @@ async function stooqOne(symbol) {
   try {
     const s=String(symbol).toLowerCase().replace(/\./g,'-')+'.us';
     const url='https://stooq.com/q/d/l/?s='+encodeURIComponent(s)+'&i=d&d1='+new Date(Date.now()-370*86400000).toISOString().slice(0,10)+'&d2='+new Date().toISOString().slice(0,10);
-    const r=await fetch(url,{headers:{accept:'text/csv'}});
+    const r=await fetchWithTimeout(url,{headers:{accept:'text/csv'}},3500);
     if(!r.ok)return {symbol,values:[]};
     const text=await r.text();
     const lines=text.trim().split(/\r?\n/);
