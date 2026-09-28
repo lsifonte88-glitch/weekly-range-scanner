@@ -171,10 +171,40 @@ async function smartMoneyCandidates(env){
     const score=change*2+(volume>0?Math.log10(volume):0);
     const prev=by.get(symbol);
     if(!prev||score>prev._score)by.set(symbol,{symbol,buckets:[],change,volume,_score:score});
-    const row=by.get(symbol); if(!row.buckets.includes(x._bucket))row.buckets.push(x._bucket);
+    const row=by.get(symbol);
+    if(!row.buckets.includes(x._bucket))row.buckets.push(x._bucket);
   }
-  const rows=[...by.values()].sort((a,b)=>b._score-a._score).slice(0,32);
-  return {symbols:rows.map(x=>x.symbol),candidates:rows.map(({symbol,buckets,change,volume})=>({symbol,buckets,change,volume}))};
+
+  let rows=[...by.values()].sort((a,b)=>b._score-a._score).slice(0,32);
+
+  // Fallback: Twelve Data puede no devolver market_movers en cuentas/endpoints
+  // donde esa ruta no está habilitada. Yahoo ya se usa en /prefilter y permite
+  // mantener el radar dinámico sin una lista fija.
+  if(!rows.length){
+    const yahoo=await Promise.all([
+      yahooScreener("day_gainers",100),
+      yahooScreener("day_losers",100),
+      yahooScreener("most_actives",100)
+    ]);
+    const yb=new Map();
+    for(const list of yahoo){
+      for(const x of list||[]){
+        const symbol=String(x.symbol||"").trim().toUpperCase();
+        if(!symbol||symbol==="MSFT"||!/^[A-Z0-9.-]+$/.test(symbol))continue;
+        const change=Math.abs(Number(x.regularMarketChangePercent||0)||0);
+        const volume=Number(x.regularMarketVolume||x.averageDailyVolume3Month||0)||0;
+        const score=change*2+(volume>0?Math.log10(volume):0);
+        const prev=yb.get(symbol);
+        if(!prev||score>prev._score)yb.set(symbol,{symbol,buckets:[],change,volume,_score:score});
+      }
+    }
+    rows=[...yb.values()].sort((a,b)=>b._score-a._score).slice(0,32);
+  }
+
+  return {
+    symbols:rows.map(x=>x.symbol),
+    candidates:rows.map(({symbol,buckets,change,volume})=>({symbol,buckets,change,volume}))
+  };
 }
 
 async function universe(env) {
