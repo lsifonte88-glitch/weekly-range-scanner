@@ -481,7 +481,8 @@ async function optionsFlowData(symbol,env){
       }
     }
   }catch(_){}
-  return await yahooOptionsFlow(symbol,env);
+  const yahoo=await yahooOptionsFlow(symbol,env);
+  return yahoo || {enabled:false,signal:"UNAVAILABLE",expiration:"",contracts:0,callVolume:0,putVolume:0,callOpenInterest:0,putOpenInterest:0,callPutRatio:null,callPutOIRatio:null,source:"Unavailable",note:"No hay datos de opciones disponibles en los proveedores configurados",asOf:new Date().toISOString()};
 }
 function avg(values){const a=(values||[]).map(Number).filter(Number.isFinite);return a.length?a.reduce((s,v)=>s+v,0)/a.length:0;}
 function pct(current,previous){const c=Number(current),p=Number(previous);return Number.isFinite(c)&&Number.isFinite(p)&&p!==0?((c/p)-1)*100:0;}
