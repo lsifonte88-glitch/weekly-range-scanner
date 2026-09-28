@@ -56,8 +56,9 @@ async function smLoad(){
   try{
     const d=await fetch(SM_API.replace("/smart-money","/smart-money-candidates")+"?_="+Date.now(),{cache:"no-store"});
     const dj=await d.json();
-    if(!d.ok||dj.status!=="ok")throw new Error(dj.message||"No se pudieron detectar candidatos.");
-    const candidates=[...new Set((dj.symbols||[]).map(x=>String(x).toUpperCase()).filter(Boolean))].slice(0,32);
+    if(!d.ok||(dj.status!=="ok"&&dj.estado!=="ok"))throw new Error(dj.message||dj.mensaje||"No se pudieron detectar candidatos.");
+    const rawCandidates=dj.symbols||dj["símbolos"]||[];
+    const candidates=[...new Set(rawCandidates.map(x=>String(x).toUpperCase().replace(/[^A-Z0-9.\-]/g,"")).filter(Boolean))].slice(0,32);
     if(!candidates.length)throw new Error("El mercado no devolvió candidatos.");
     let all=[];
     for(let i=0;i<candidates.length;i+=8){
