@@ -173,13 +173,16 @@ async function smartMoneyCandidates(env){
   for(const x of buckets){
     const symbol=String(x.symbol||x.ticker||"").trim().toUpperCase();
     if(!symbol||symbol==="MSFT"||!/^[A-Z0-9.-]+$/.test(symbol))continue;
-    const change=Math.abs(Number(x.percent_change ?? x.change_percent ?? x.change ?? 0) || 0);
+    const rawChange=Number(x.percent_change ?? x.change_percent ?? x.change ?? 0) || 0;
+    const change=Math.abs(rawChange);
     const volume=Number(x.volume||x.average_volume||0)||0;
     const score=change*2+(volume>0?Math.log10(volume):0);
+    const inferred=rawChange>0?"INFLOW":rawChange<0?"OUTFLOW":"ACTIVE";
+    const bucket=inferred;
     const prev=by.get(symbol);
-    if(!prev||score>prev._score)by.set(symbol,{symbol,buckets:[],change,volume,_score:score});
+    if(!prev||score>prev._score)by.set(symbol,{symbol,buckets:[],change:rawChange,volume,_score:score});
     const row=by.get(symbol);
-    if(!row.buckets.includes(x._bucket))row.buckets.push(x._bucket);
+    if(!row.buckets.includes(bucket))row.buckets.push(bucket);
   }
 
   let rows=[...by.values()].sort((a,b)=>b._score-a._score).slice(0,32);
@@ -198,11 +201,15 @@ async function smartMoneyCandidates(env){
       for(const x of list||[]){
         const symbol=String(x.symbol||"").trim().toUpperCase();
         if(!symbol||symbol==="MSFT"||!/^[A-Z0-9.-]+$/.test(symbol))continue;
-        const change=Math.abs(Number(x.regularMarketChangePercent||0)||0);
+        const rawChange=Number(x.regularMarketChangePercent||0)||0;
+        const change=Math.abs(rawChange);
         const volume=Number(x.regularMarketVolume||x.averageDailyVolume3Month||0)||0;
         const score=change*2+(volume>0?Math.log10(volume):0);
+        const bucket=rawChange>0?"INFLOW":rawChange<0?"OUTFLOW":"ACTIVE";
         const prev=yb.get(symbol);
-        if(!prev||score>prev._score)yb.set(symbol,{symbol,buckets:[],change,volume,_score:score});
+        if(!prev||score>prev._score)yb.set(symbol,{symbol,buckets:[],change:rawChange,volume,_score:score});
+        const row=yb.get(symbol);
+        if(!row.buckets.includes(bucket))row.buckets.push(bucket);
       }
     }
     rows=[...yb.values()].sort((a,b)=>b._score-a._score).slice(0,32);
