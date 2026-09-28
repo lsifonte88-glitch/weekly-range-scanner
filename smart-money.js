@@ -1,11 +1,6 @@
 const SM_API = "https://weekly-range-api.changowalu.workers.dev/smart-money";
 
-const SM_UNIVERSE = [
-  "AAPL","NVDA","AMZN","GOOGL","META","AVGO","TSLA","AMD","NFLX","ORCL","CRM","ADBE","CSCO","QCOM","MU","AMAT",
-  "JPM","BAC","WFC","GS","V","MA","PYPL","COF","AXP","HOOD","LLY","UNH","JNJ","ABBV","MRK","PFE",
-  "TMO","ABT","WMT","COST","HD","LOW","MCD","NKE","KO","PEP","XOM","CVX","COP","SLB","CAT","DE",
-  "GE","HON","BA","RTX","UBER","PLTR","PANW","CRWD","NOW","SHOP","SPY","QQQ","IWM","DIA","XLF","XLK"
-];
+
 
 function smEscape(value) {
   return String(value ?? "").replace(/[&<>"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[char]));
@@ -206,27 +201,3 @@ async function smDetails(symbol){
   }catch(e){console.error("SMART MONEY DETAIL ERROR:",e);status.textContent="ERROR: "+e.message}
 }
 function smSleep(ms){return new Promise(r=>setTimeout(r,ms));}
-async function smScanUniverse(){
-  const status=document.getElementById("smStatus");
-  const tbody=document.querySelector("#smTable tbody");
-  if(!status||!tbody)return;
-  status.textContent="Analizando universo Smart Money por bloques de 8…";
-  tbody.innerHTML="";
-  let all=[];
-  const chunks=[];
-  for(let i=0;i<SM_UNIVERSE.length;i+=8) chunks.push(SM_UNIVERSE.slice(i,i+8));
-  for(let i=0;i<chunks.length;i++){
-    try{
-      const url=SM_API+"?symbols="+encodeURIComponent(chunks[i].join(","))+"&detail=0";
-      const r=await fetch(url,{cache:"no-store"});
-      const j=await r.json();
-      if(Array.isArray(j.data)) all.push(...j.data);
-      smRenderRows(all);
-      status.textContent="Smart Money: bloque "+(i+1)+"/"+chunks.length+" · "+all.length+" símbolos";
-    }catch(e){
-      status.textContent="Smart Money: bloque "+(i+1)+"/"+chunks.length+" con error · continuando";
-    }
-  }
-  smRenderRows(all);
-  status.textContent="Smart Money terminado: "+all.length+" símbolos";
-}
