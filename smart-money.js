@@ -31,10 +31,27 @@ function smRenderRows(data){
 async function smLoad(){
   const input=document.getElementById("symbols"),status=document.getElementById("smStatus"),rows=document.getElementById("smRows");
   if(!input||!status||!rows)return;
-  const symbols=[...new Set(input.value.split(",").map(x=>x.trim().toUpperCase()).filter(Boolean))].slice(0,8);
-  if(!symbols.length){status.textContent="Introduce al menos un símbolo.";return;}
-  status.textContent="Analizando Smart Money...";rows.innerHTML='<tr><td colspan="15" class="loading">Consultando datos...</td></tr>';
-  try{const r=await fetch(SM_API+"?symbols="+encodeURIComponent(symbols.join(","))+"&detail=0&_="+Date.now(),{cache:"no-store"});const text=await r.text();let data;try{data=JSON.parse(text)}catch{throw new Error("El servidor no devolvió JSON. HTTP "+r.status)}if(!r.ok||data.status!=="ok")throw new Error(data.message||"Error HTTP "+r.status);smRenderRows(data.data||[]);status.textContent="Smart Money terminado · "+(data.data||[]).length+" símbolos"}catch(e){console.error("SMART MONEY ERROR:",e);status.textContent="ERROR: "+e.message;rows.innerHTML=`<tr><td colspan="15" class="red">${smEscape(e.message)}</td></tr>`}
+  status.textContent="Detectando dónde se está moviendo el dinero ahora…";
+  rows.innerHTML='<tr><td colspan="15" class="loading">Buscando ganadores, perdedores y mayor actividad del mercado…</td></tr>';
+  try{
+    const d=await fetch(SM_API.replace("/smart-money","/smart-money-candidates")+"?_="+Date.now(),{cache:"no-store"});
+    const dj=await d.json();
+    if(!d.ok||dj.status!=="ok")throw new Error(dj.message||"No se pudieron detectar candidatos.");
+    const candidates=[...new Set((dj.symbols||[]).map(x=>String(x).toUpperCase()).filter(Boolean))].slice(0,32);
+    if(!candidates.length)throw new Error("El mercado no devolvió candidatos.");
+    let all=[];
+    for(let i=0;i<candidates.length;i+=8){
+      const chunk=candidates.slice(i,i+8);
+      const r=await fetch(SM_API+"?symbols="+encodeURIComponent(chunk.join(","))+"&detail=0&_="+Date.now(),{cache:"no-store"});
+      const j=await r.json();
+      if(Array.isArray(j.data))all.push(...j.data);
+      const pct=Math.min(100,Math.round((Math.min(i+8,candidates.length)/candidates.length)*100));
+      status.textContent="Smart Money en tiempo real · analizando "+Math.min(i+8,candidates.length)+"/"+candidates.length+" candidatos ("+pct+"%)";
+    }
+    all.sort((a,b)=>(Number(b.score)||0)-(Number(a.score)||0));
+    smRenderRows(all.slice(0,25));
+    status.textContent="Radar terminado · "+all.length+" movimientos relevantes detectados · mostrando Top 25";
+  }catch(e){console.error("SMART MONEY ERROR:",e);status.textContent="ERROR: "+e.message;rows.innerHTML=`<tr><td colspan="15" class="red">${smEscape(e.message)}</td></tr>`}
 }
 
 async function smDetails(symbol){
