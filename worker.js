@@ -76,7 +76,10 @@ async function yahooScreener(scrIds,count=250) {
   for(const host of hosts){
     try{
       const url="https://"+host+"/v1/finance/screener/predefined/saved?formatted=false&lang=en-US&region=US&scrIds="+encodeURIComponent(scrIds)+"&count="+count+"&corsDomain=finance.yahoo.com";
-      const r=await fetch(url,{headers:{accept:"application/json","user-agent":"Mozilla/5.0"}});
+      const controller=new AbortController();
+      const timer=setTimeout(()=>controller.abort(),3000);
+      const r=await fetch(url,{headers:{accept:"application/json","user-agent":"Mozilla/5.0"},signal:controller.signal});
+      clearTimeout(timer);
       if(!r.ok)continue;
       const j=await r.json();
       const quotes=j?.finance?.result?.[0]?.quotes;
@@ -250,8 +253,10 @@ export default {
       if (url.pathname === "/prefilter") {
         const symbols = await yahooMovers();
         if (symbols.length) {
-          return json({status:"ok",count:symbols.length,symbols,generatedAt:new Date().toISOString(),source:"Yahoo Finance screener",note:"Prefiltro amplio: ganadores, perdedores y mayor volumen. Los filtros completos del Scanner se aplican después."},200,{"cache-control":"public, max-age=60"});
+          return json({status:"ok",count:symbols.length,symbols:symbols.slice(0,32),generatedAt:new Date().toISOString(),source:"Yahoo Finance screener",note:"Prefiltro dinámico: ganadores, perdedores y mayor actividad."},200,{"cache-control":"public, max-age=60"});
         }
+        return json({status:"error",message:"No se pudieron detectar movimientos del mercado en Yahoo Finance."},502);
+      }
         return json({status:"error",message:"Yahoo Finance screener no devolvió candidatos."},502);
       }
       if (url.pathname === "/universe") {
