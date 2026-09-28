@@ -257,8 +257,6 @@ export default {
         }
         return json({status:"error",message:"No se pudieron detectar movimientos del mercado en Yahoo Finance."},502);
       }
-        return json({status:"error",message:"Yahoo Finance screener no devolvió candidatos."},502);
-      }
       if (url.pathname === "/universe") {
         const symbols = await universe(env);
         return json({ status: "ok", count: symbols.length, symbols, generatedAt: new Date().toISOString() }, 200, { "cache-control": "public, max-age=21600" });
