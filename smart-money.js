@@ -63,7 +63,7 @@ async function smLoad(){
     // Ruta crítica: /prefilter ya entrega ganadores, perdedores y mayor actividad
     // dinámicamente. No hacemos depender el radar de un proveedor lento.
     status.textContent="Radar: detectando movimientos del mercado…";
-    const fallback=await smFetchJson(SM_API.replace("/smart-money","/prefilter")+"?_="+Date.now(),10000);
+    const fallback=await smFetchJson(SM_API.replace("/smart-money","/prefilter")+"?_="+Date.now(),20000);
     dj=fallback.json;
     if(!fallback.ok||dj.status!=="ok")throw new Error(dj.message||"No se pudieron detectar movimientos del mercado.");
     const rawCandidates=dj.symbols||dj["símbolos"]||dj.symbols||[];
