@@ -19,7 +19,27 @@ function smBadge(value) {
 }
 function smMoney(value){const n=Number(value)||0;if(n>=1e9)return "$"+(n/1e9).toFixed(2)+"B";if(n>=1e6)return "$"+(n/1e6).toFixed(2)+"M";if(n>=1e3)return "$"+(n/1e3).toFixed(1)+"K";return "$"+n.toFixed(0)}
 
+function smRenderSummary(data){
+  const host=document.getElementById("smRows")?.closest(".panel");
+  if(!host)return;
+  let box=document.getElementById("smSummary");
+  if(!box){
+    box=document.createElement("div");
+    box.id="smSummary";
+    box.className="summary";
+    box.style.margin="12px 0";
+    const table=host.querySelector(".scroll");
+    host.insertBefore(box,table);
+  }
+  const arr=Array.isArray(data)?data:[];
+  const inflow=arr.filter(x=>String(x.flowDirection||"").toUpperCase()==="INFLOW").sort((a,b)=>(Number(b.score)||0)-(Number(a.score)||0)).slice(0,5);
+  const outflow=arr.filter(x=>String(x.flowDirection||"").toUpperCase()==="OUTFLOW").sort((a,b)=>(Number(b.score)||0)-(Number(a.score)||0)).slice(0,5);
+  const unusual=arr.filter(x=>String(x.flowDirection||"").toUpperCase()==="ABNORMAL_ACTIVITY"||String(x.unusual?.signal||"").toUpperCase().includes("UNUSUAL")).sort((a,b)=>(Number(b.unusual?.score)||0)-(Number(a.unusual?.score)||0)).slice(0,5);
+  const card=(title,list,cls)=>'<div class="badge" style="flex:1;min-width:280px"><b>'+title+'</b><div class="small" style="margin-top:6px">'+(list.length?list.map(x=>'<span class="'+cls+'"><b>'+smEscape(x.symbol)+'</b> '+(Number(x.score)||0)+'</span>').join(" · "):"Sin señales")+'</div></div>';
+  box.innerHTML=card("TOP ENTRADA DE DINERO",inflow,"green")+card("TOP SALIDA DE DINERO",outflow,"red")+card("ACTIVIDAD ANORMAL",unusual,"yellow");
+}
 function smRenderRows(data){
+  smRenderSummary(data);
   const rows=document.getElementById("smRows"); if(!rows)return;
   if(!Array.isArray(data)||!data.length){rows.innerHTML='<tr><td colspan="15" class="loading">Sin datos.</td></tr>';return;}
   rows.innerHTML=data.map((x,i)=>{
