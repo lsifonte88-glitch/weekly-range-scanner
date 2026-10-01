@@ -288,9 +288,14 @@ export default {
           }
           return json({status:"ok",mode:"FAST_SUBREQUEST_SAFE",data,generatedAt:new Date().toISOString(),sources:{sec:true,marketHistoryFallbacks:["Stooq","Yahoo Finance","Twelve Data"],options:"Yahoo Finance",institutional13F:"deferred",congress:Boolean(env.QUIVER_API_KEY),etf:"deferred"}});
         }
+        const detailSymbols = symbols.slice(0,4);
         const institutionalSnap = await institutionalSnapshot(env);
-        for (const s of symbols) data.push(await smartMoneyData(s,env,true,institutionalSnap,s,secMap));
-        return json({status:"ok",mode:"DETAIL",data,generatedAt:new Date().toISOString(),sources:{sec:true,marketHistoryFallbacks:["Stooq","Yahoo Finance","Twelve Data"],institutional13F:true,congress:Boolean(env.QUIVER_API_KEY||env.CONGRESS_API_URL),etf:Boolean(env.ETF_PROVIDER_URL||env.ETF_COMPOSITION_ENABLED==="true")}});
+        const resolvedSecMap = await secTickers(env).catch(()=>({}));
+        for (const s of detailSymbols) {
+          try { data.push(await smartMoneyData(s,env,true,institutionalSnap,s,resolvedSecMap)); }
+          catch (e) { data.push({symbol:s,score:50,flowDirection:"MIXED",error:e?.message||String(e),mode:"DETAIL_SAFE"}); }
+        }
+        return json({status:"ok",mode:"DETAIL_SAFE",data,requested:symbols.length,processed:detailSymbols.length,generatedAt:new Date().toISOString(),sources:{sec:true,marketHistoryFallbacks:["Stooq","Yahoo Finance","Twelve Data"],institutional13F:true,congress:Boolean(env.QUIVER_API_KEY||env.CONGRESS_API_URL),etf:Boolean(env.ETF_PROVIDER_URL||env.ETF_COMPOSITION_ENABLED==="true")}});
       }
 if (url.pathname === "/api") {
         const requestedSymbols = cleanSymbols(url.searchParams.get("symbols") || url.searchParams.get("symbol"));
