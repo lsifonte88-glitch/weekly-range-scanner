@@ -692,6 +692,31 @@ function confluenceScore(parts){
   const confidence=aligned+opposed<2?"LOW":(aligned>=3||opposed>=3)?"HIGH":"MEDIUM";
   return {raw:s,direction:s>=3?"INFLOW":s<=-3?"OUTFLOW":"MIXED",confidence,aligned,opposed};
 }
+function earlySmartMoneyFromValues(v, source) {
+  if (!Array.isArray(v) || v.length < 25) return {signal:"UNAVAILABLE",score:0,source,note:"Insufficient history"};
+  const last=v.at(-1), prev=v.slice(0,-1), avgVol20=avg(prev.slice(-20).map(x=>x.volume)), rvol=avgVol20?last.volume/avgVol20:0;
+  const avgDollar20=avg(prev.slice(-20).map(x=>x.close*x.volume)), dollarRel=avgDollar20?(last.close*last.volume)/avgDollar20:0;
+  const p3=pct(last.close,v.at(-4)?.close),p5=pct(last.close,v.at(-6)?.close),p10=pct(last.close,v.at(-11)?.close),p20=pct(last.close,v.at(-21)?.close);
+  const last20=v.slice(-20),totalPV=last20.reduce((s,x)=>s+(((x.high+x.low+x.close)/3)*x.volume),0),totalVol=last20.reduce((s,x)=>s+x.volume,0);
+  const vwap=totalVol?totalPV/totalVol:last.close,vwapDistance=vwap?((last.close/vwap)-1)*100:0,recent=v.slice(-10);
+  let upDollar=0,downDollar=0; for(const x of recent){const d=x.close*x.volume;if(x.close>x.open)upDollar+=d;else if(x.close<x.open)downDollar+=d;}
+  const dollarImbalance=upDollar+downDollar>0?(upDollar-downDollar)/(upDollar+downDollar):0,rvolSeries=[];
+  for(let i=Math.max(1,v.length-6);i<v.length;i++){const h=v.slice(Math.max(0,i-20),i),av=avg(h.map(x=>x.volume));if(av>0)rvolSeries.push(v[i].volume/av);}
+  const previousRVOL=avg(rvolSeries.slice(0,-1)),rvolAcceleration=previousRVOL>0?rvol/previousRVOL:1;
+  let score=0;const reasons=[];
+  if(dollarRel>=1.5&&dollarRel<=4){score+=20;reasons.push("$ volumen creciente");}else if(dollarRel>=1.2)score+=12;
+  if(rvol>=1.5&&rvol<=3.5){score+=15;reasons.push("RVOL temprano");}else if(rvol>=1.2)score+=8;
+  if(rvolAcceleration>=1.25){score+=15;reasons.push("RVOL acelerando");}else if(rvolAcceleration>=1.10)score+=8;
+  if(dollarImbalance>=.20){score+=20;reasons.push("acumulación compradora");}else if(dollarImbalance>=.10)score+=10;else if(dollarImbalance<=-.20){score-=20;reasons.push("distribución");}else if(dollarImbalance<=-.10)score-=10;
+  if(p5>=0&&p5<=4){score+=10;reasons.push("precio todavía contenido");}else if(p5>4&&p5<=7)score+=3;else if(p5>7){score-=15;reasons.push("movimiento ya extendido");}
+  if(p10>=0&&p10<=8)score+=8;
+  if(vwapDistance>=0&&vwapDistance<=4){score+=7;reasons.push("sobre VWAP sin extensión");}else if(vwapDistance<-3)score-=5;else if(vwapDistance>6){score-=10;reasons.push("muy extendida sobre VWAP");}
+  if(p20>15){score-=15;reasons.push("subida 20D demasiado avanzada");}else if(p20>10)score-=8;
+  score=Math.max(0,Math.min(100,Math.round(score)));
+  const signal=score>=75?"EARLY_ACCUMULATION":score>=60?"DEVELOPING":score<=35?"LATE_OR_WEAK":"NEUTRAL";
+  return {signal,score,rvol,dollarRel,dollarImbalance,rvolAcceleration,priceChange3D:p3,priceChange5D:p5,priceChange10D:p10,priceChange20D:p20,vwap,vwapDistance,source,reasons,note:"Modelo de acumulación temprana basado en precio + volumen; no identifica directamente al comprador institucional."};
+}
+
 async function smartMoneyFastData(symbol,env,secMap){
   // FAST mode: bounded subrequests for Cloudflare Workers.
   // Normal scans intentionally avoid 13F (lagged/expensive) and deep SEC filing history.
@@ -713,6 +738,7 @@ async function smartMoneyFastData(symbol,env,secMap){
   const source=values.length?(history.source||"Unavailable"):"Unavailable";
   const marketFlow=marketFlowFromValues(values,source);
   const unusual=values.length?unusualFromValues(values.slice(-25),source):{signal:"UNAVAILABLE",score:0,rvol:0,source,note:"No hay histórico disponible en los proveedores configurados"};
+  const earlySmartMoney=earlySmartMoneyFromValues(values,source);
   const options={enabled:false,signal:"DEFERRED",expiration:"",contracts:0,callVolume:0,putVolume:0,callOpenInterest:0,putOpenInterest:0,callPutRatio:null,callPutOIRatio:null,source:"Deferred",note:"Opciones diferidas al detalle para mantener el radar rápido."};
   const congress={signal:"DEFERRED",count:0,buys:0,sells:0,events:[],note:"Congreso diferido al detalle."};
   const component={
@@ -735,7 +761,7 @@ async function smartMoneyFastData(symbol,env,secMap){
   if(congress.signal!=="NEUTRAL") reasons.push("Congreso "+congress.signal);
   if(!reasons.length) reasons.push("sin confluencia direccional suficiente");
   return {
-    symbol,score,flowDirection,marketFlow,confluence,reasons,insider,
+    symbol,score,flowDirection,marketFlow,earlySmartMoney,confluence,reasons,insider,
     institutional:{signal:"UNAVAILABLE",score:0,filers:0,managers:[],events:[],note:"Fast mode: 13F diferido; se consulta en detalle."},
     congress,unusual,options,
     etf:{signal:"N/A",holdings:[],note:"Fast mode: ETF composition diferida."},
@@ -781,5 +807,6 @@ async function smartMoneyData(symbol,env,detail=false,institutionalSnap=[],issue
   if(congress.signal!=="NEUTRAL") reasons.push("Congreso "+congress.signal);
   if(options.signal==="CALL_HEAVY"||options.signal==="PUT_HEAVY") reasons.push("opciones "+options.signal);
   if(!reasons.length) reasons.push("sin confluencia direccional suficiente");
-  return {symbol,score,flowDirection,marketFlow,confluence,reasons,insider,institutional,congress,unusual,options,etf,technical,freshness,dataQuality,asOf:new Date().toISOString(),events:detail?[...(insider.events||[]),...(institutional.events||[]),...(congress.events||[])]:[]};
+  const earlySmartMoney=earlySmartMoneyFromValues(history.values,history.source);
+  return {symbol,score,flowDirection,marketFlow,earlySmartMoney,confluence,reasons,insider,institutional,congress,unusual,options,etf,technical,freshness,dataQuality,asOf:new Date().toISOString(),events:detail?[...(insider.events||[]),...(institutional.events||[]),...(congress.events||[])]:[]};
 }
