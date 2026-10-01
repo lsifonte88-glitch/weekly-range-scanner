@@ -288,7 +288,7 @@ export default {
           }
           return json({status:"ok",mode:"FAST_SUBREQUEST_SAFE",data,generatedAt:new Date().toISOString(),sources:{sec:true,marketHistoryFallbacks:["Stooq","Yahoo Finance","Twelve Data"],options:"Yahoo Finance",institutional13F:"deferred",congress:Boolean(env.QUIVER_API_KEY),etf:"deferred"}});
         }
-        const detailSymbols = symbols.slice(0,4);
+        const detailSymbols = symbols.slice(0,1);
         const institutionalSnap = await institutionalSnapshot(env);
         const resolvedSecMap = await secTickers(env).catch(()=>({}));
         for (const s of detailSymbols) {
