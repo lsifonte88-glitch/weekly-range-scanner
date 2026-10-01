@@ -288,14 +288,40 @@ export default {
           }
           return json({status:"ok",mode:"FAST_SUBREQUEST_SAFE",data,generatedAt:new Date().toISOString(),sources:{sec:true,marketHistoryFallbacks:["Stooq","Yahoo Finance","Twelve Data"],options:"Yahoo Finance",institutional13F:"deferred",congress:Boolean(env.QUIVER_API_KEY),etf:"deferred"}});
         }
+        // DETAIL_SAFE: un solo símbolo y solo dependencias acotadas.
+        // No cargamos snapshots globales de 13F ni historial profundo de SEC aquí:
+        // esas consultas pueden superar el límite de subrequests de Cloudflare.
         const detailSymbols = symbols.slice(0,1);
-        const institutionalSnap = await institutionalSnapshot(env);
-        const resolvedSecMap = await secTickers(env).catch(()=>({}));
+        let resolvedSecMap = {};
+        try { resolvedSecMap = await secTickers(env); } catch (_) {}
         for (const s of detailSymbols) {
-          try { data.push(await smartMoneyData(s,env,true,institutionalSnap,s,resolvedSecMap)); }
-          catch (e) { data.push({symbol:s,score:50,flowDirection:"MIXED",error:e?.message||String(e),mode:"DETAIL_SAFE"}); }
+          try {
+            data.push(await smartMoneyFastData(s,env,resolvedSecMap));
+          } catch (e) {
+            data.push({
+              symbol:s,
+              score:50,
+              flowDirection:"MIXED",
+              error:e?.message||String(e),
+              mode:"DETAIL_SAFE"
+            });
+          }
         }
-        return json({status:"ok",mode:"DETAIL_SAFE",data,requested:symbols.length,processed:detailSymbols.length,generatedAt:new Date().toISOString(),sources:{sec:true,marketHistoryFallbacks:["Stooq","Yahoo Finance","Twelve Data"],institutional13F:true,congress:Boolean(env.QUIVER_API_KEY||env.CONGRESS_API_URL),etf:Boolean(env.ETF_PROVIDER_URL||env.ETF_COMPOSITION_ENABLED==="true")}});
+        return json({
+          status:"ok",
+          mode:"DETAIL_SAFE",
+          data,
+          requested:symbols.length,
+          processed:detailSymbols.length,
+          generatedAt:new Date().toISOString(),
+          sources:{
+            sec:Boolean(Object.keys(resolvedSecMap).length),
+            marketHistoryFallbacks:["Stooq","Yahoo Finance","Twelve Data"],
+            institutional13F:"DEFERRED",
+            congress:"DEFERRED",
+            options:"DEFERRED"
+          }
+        });
       }
 if (url.pathname === "/api") {
         const requestedSymbols = cleanSymbols(url.searchParams.get("symbols") || url.searchParams.get("symbol"));
