@@ -650,29 +650,64 @@ function confluenceScore(parts){
 }
 function earlySmartMoneyFromValues(v, source) {
   if (!Array.isArray(v) || v.length < 25) return {signal:"UNAVAILABLE",score:0,source,note:"Insufficient history"};
-  const last=v.at(-1), prev=v.slice(0,-1), avgVol20=avg(prev.slice(-20).map(x=>x.volume)), rvol=avgVol20?last.volume/avgVol20:0;
+  const last=v.at(-1), prev=v.slice(0,-1);
+  const avgVol20=avg(prev.slice(-20).map(x=>x.volume)), rvol=avgVol20?last.volume/avgVol20:0;
   const avgDollar20=avg(prev.slice(-20).map(x=>x.close*x.volume)), dollarRel=avgDollar20?(last.close*last.volume)/avgDollar20:0;
   const p3=pct(last.close,v.at(-4)?.close),p5=pct(last.close,v.at(-6)?.close),p10=pct(last.close,v.at(-11)?.close),p20=pct(last.close,v.at(-21)?.close);
   const last20=v.slice(-20),totalPV=last20.reduce((s,x)=>s+(((x.high+x.low+x.close)/3)*x.volume),0),totalVol=last20.reduce((s,x)=>s+x.volume,0);
-  const vwap=totalVol?totalPV/totalVol:last.close,vwapDistance=vwap?((last.close/vwap)-1)*100:0,recent=v.slice(-10);
-  let upDollar=0,downDollar=0; for(const x of recent){const d=x.close*x.volume;if(x.close>x.open)upDollar+=d;else if(x.close<x.open)downDollar+=d;}
-  const dollarImbalance=upDollar+downDollar>0?(upDollar-downDollar)/(upDollar+downDollar):0,rvolSeries=[];
-  for(let i=Math.max(1,v.length-6);i<v.length;i++){const h=v.slice(Math.max(0,i-20),i),av=avg(h.map(x=>x.volume));if(av>0)rvolSeries.push(v[i].volume/av);}
+  const vwap=totalVol?totalPV/totalVol:last.close,vwapDistance=vwap?((last.close/vwap)-1)*100:0;
+  const recent=v.slice(-10);
+  let upDollar=0,downDollar=0;
+  for(const x of recent){const d=x.close*x.volume;if(x.close>x.open)upDollar+=d;else if(x.close<x.open)downDollar+=d;}
+  const dollarImbalance=upDollar+downDollar>0?(upDollar-downDollar)/(upDollar+downDollar):0;
+  const rvolSeries=[];
+  for(let i=Math.max(1,v.length-6);i<v.length;i++){
+    const h=v.slice(Math.max(0,i-20),i),av=avg(h.map(x=>x.volume));
+    if(av>0)rvolSeries.push(v[i].volume/av);
+  }
   const previousRVOL=avg(rvolSeries.slice(0,-1)),rvolAcceleration=previousRVOL>0?rvol/previousRVOL:1;
-  let score=0;const reasons=[];
-  if(dollarRel>=1.5&&dollarRel<=4){score+=20;reasons.push("$ volumen creciente");}else if(dollarRel>=1.2)score+=12;
-  if(rvol>=1.5&&rvol<=3.5){score+=15;reasons.push("RVOL temprano");}else if(rvol>=1.2)score+=8;
-  if(rvolAcceleration>=1.25){score+=15;reasons.push("RVOL acelerando");}else if(rvolAcceleration>=1.10)score+=8;
-  if(dollarImbalance>=.20){score+=20;reasons.push("acumulación compradora");}else if(dollarImbalance>=.10)score+=10;else if(dollarImbalance<=-.20){score-=20;reasons.push("distribución");}else if(dollarImbalance<=-.10)score-=10;
-  if(p5>=0&&p5<=4){score+=10;reasons.push("precio todavía contenido");}else if(p5>4&&p5<=7)score+=3;else if(p5>7){score-=15;reasons.push("movimiento ya extendido");}
-  if(p10>=0&&p10<=8)score+=8;
-  if(vwapDistance>=0&&vwapDistance<=4){score+=7;reasons.push("sobre VWAP sin extensión");}else if(vwapDistance<-3)score-=5;else if(vwapDistance>6){score-=10;reasons.push("muy extendida sobre VWAP");}
-  if(p20>15){score-=15;reasons.push("subida 20D demasiado avanzada");}else if(p20>10)score-=8;
+
+  // El objetivo es detectar acumulación ANTES de la aceleración, no perseguir
+  // movimientos que ya están extendidos. La extensión sobre VWAP y el momentum
+  // excesivo reducen el score aunque el RVOL sea alto.
+  let score=0; const reasons=[];
+  if(dollarRel>=1.15&&dollarRel<=2.5){score+=18;reasons.push("$ volumen creciendo");}
+  else if(dollarRel>2.5&&dollarRel<=4){score+=8;reasons.push("$ volumen ya acelerado");}
+  else if(dollarRel>4){score-=8;reasons.push("$ volumen demasiado acelerado");}
+
+  if(rvol>=1.15&&rvol<2){score+=12;reasons.push("RVOL temprano");}
+  else if(rvol>=2&&rvol<=3){score+=7;reasons.push("RVOL confirmado");}
+  else if(rvol>3){score-=6;reasons.push("RVOL tardío/extremo");}
+
+  if(rvolAcceleration>=1.10&&rvolAcceleration<=1.60){score+=15;reasons.push("RVOL acelerando desde base");}
+  else if(rvolAcceleration>1.60){score+=5;reasons.push("RVOL aceleración fuerte");}
+
+  if(dollarImbalance>=.20){score+=18;reasons.push("acumulación compradora");}
+  else if(dollarImbalance>=.10){score+=9;reasons.push("sesgo comprador");}
+  else if(dollarImbalance<=-.20){score-=20;reasons.push("distribución");}
+  else if(dollarImbalance<=-.10){score-=10;reasons.push("sesgo vendedor");}
+
+  if(p5>=0&&p5<=3){score+=12;reasons.push("momentum temprano");}
+  else if(p5>3&&p5<=6){score+=5;reasons.push("momentum en aceleración");}
+  else if(p5>6&&p5<=10){score-=5;reasons.push("movimiento avanzado");}
+  else if(p5>10){score-=18;reasons.push("movimiento demasiado extendido");}
+  else if(p5<-4){score-=12;reasons.push("momentum débil");}
+
+  if(p10>=0&&p10<=6){score+=8;reasons.push("avance 10D contenido");}
+  else if(p10>10){score-=8;reasons.push("avance 10D avanzado");}
+  if(p20>15){score-=15;reasons.push("subida 20D demasiado avanzada");}
+  else if(p20>10){score-=8;reasons.push("subida 20D avanzada");}
+
+  if(vwapDistance>=-1&&vwapDistance<=2.5){score+=12;reasons.push("cerca de VWAP");}
+  else if(vwapDistance>2.5&&vwapDistance<=5){score+=3;reasons.push("sobre VWAP moderadamente");}
+  else if(vwapDistance>5&&vwapDistance<=7){score-=8;reasons.push("extendida sobre VWAP");}
+  else if(vwapDistance>7){score-=18;reasons.push("muy extendida sobre VWAP");}
+  else if(vwapDistance<-3){score-=5;reasons.push("bajo VWAP");}
+
   score=Math.max(0,Math.min(100,Math.round(score)));
   const signal=score>=75?"EARLY_ACCUMULATION":score>=60?"DEVELOPING":score<=35?"LATE_OR_WEAK":"NEUTRAL";
-  return {signal,score,rvol,dollarRel,dollarImbalance,rvolAcceleration,priceChange3D:p3,priceChange5D:p5,priceChange10D:p10,priceChange20D:p20,vwap,vwapDistance,source,reasons,note:"Modelo de acumulación temprana basado en precio + volumen; no identifica directamente al comprador institucional."};
+  return {signal,score,rvol,dollarRel,dollarImbalance,rvolAcceleration,priceChange3D:p3,priceChange5D:p5,priceChange10D:p10,priceChange20D:p20,vwap,vwapDistance,source,reasons,note:"Modelo de acumulación temprana basado en precio + volumen; penaliza extensión sobre VWAP y momentum ya avanzado; no identifica directamente al comprador institucional."};
 }
-
 async function smartMoneyFastData(symbol,env,secMap){
   // FAST mode: bounded subrequests for Cloudflare Workers.
   // Normal scans intentionally avoid 13F (lagged/expensive) and deep SEC filing history.
