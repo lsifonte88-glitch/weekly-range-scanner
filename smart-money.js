@@ -1,4 +1,4 @@
-const SM_API = "https://weekly-range-api.changowalu.workers.dev/smart-money";
+const SM_API = location.origin + "/smart-money";
 
 
 
