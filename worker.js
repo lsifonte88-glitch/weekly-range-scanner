@@ -123,7 +123,8 @@ async function stooqOne(symbol) {
     const r=await fetchWithTimeout(url,{headers:{accept:'text/csv'}},3500);
     if(!r.ok)return {symbol,values:[]};
     const text=await r.text();
-    const lines=text.trim().split(/\r?\n/);
+    const lines=text.trim().split(/\r?
+/);
     if(lines.length<2)return {symbol,values:[]};
     const values=lines.slice(1).map(line=>{
       const p=line.split(',');
@@ -254,7 +255,24 @@ export default {
           });
         }
         data.sort((a,b)=>(Number(b.score)||0)-(Number(a.score)||0));
-        // Confirmación real solo para los 3 mejores candidatos.\n        // Con 30 símbolos + 5 screeners, este límite mantiene el Worker bajo el máximo\n        // de subrequests y permite consultar fuentes reales sin bloquear el radar.\n        const top3=data.slice(0,3);\n        let secMap={};\n        try{secMap=await secTickers(env);}catch(_){}\n        await Promise.all(top3.map(async x=>{\n          const cik=secMap[x.symbol];\n          try{\n            if(cik) x.insider=await insiderFastData(x.symbol,cik,env);\n            x.options=await yahooOptionsFlow(x.symbol,env) || {enabled:false,signal:"UNAVAILABLE",source:"Unavailable",note:"Yahoo options unavailable"};\n            if(env.QUIVER_API_KEY) x.congress=await congressData(x.symbol,env,false);\n            else x.congress={signal:"DEFERRED",count:0,buys:0,sells:0,events:[],note:"QUIVER_API_KEY no configurada."};\n          }catch(_){}\n          x.confirmation=confirmationFromSources(x.insider||{},x.institutional||{},x.congress||{},x.options||{});\n          x.dataQuality=[x.dataQuality||"",x.insider?.signal==="UNAVAILABLE"?"SEC error":x.insider?.count?"SEC Form 4":"sin Form 4",x.options?.enabled?"opciones OK":"sin opciones",x.congress?.signal && x.congress.signal!=="DEFERRED"?"Congreso "+x.congress.signal:"Congreso diferido"].filter(Boolean).join(" · ");\n        }));\n        for(const x of data){
+        // Confirmación real solo para los 3 mejores candidatos.
+        // Con 30 símbolos + 5 screeners, este límite mantiene el Worker bajo el máximo
+        // de subrequests y permite consultar fuentes reales sin bloquear el radar.
+        const top3=data.slice(0,3);
+        let secMap={};
+        try{secMap=await secTickers(env);}catch(_){}
+        await Promise.all(top3.map(async x=>{
+          const cik=secMap[x.symbol];
+          try{
+            if(cik) x.insider=await insiderFastData(x.symbol,cik,env);
+            x.options=await yahooOptionsFlow(x.symbol,env) || {enabled:false,signal:"UNAVAILABLE",source:"Unavailable",note:"Yahoo options unavailable"};
+            if(env.QUIVER_API_KEY) x.congress=await congressData(x.symbol,env,false);
+            else x.congress={signal:"DEFERRED",count:0,buys:0,sells:0,events:[],note:"QUIVER_API_KEY no configurada."};
+          }catch(_){}
+          x.confirmation=confirmationFromSources(x.insider||{},x.institutional||{},x.congress||{},x.options||{});
+          x.dataQuality=[x.dataQuality||"",x.insider?.signal==="UNAVAILABLE"?"SEC error":x.insider?.count?"SEC Form 4":"sin Form 4",x.options?.enabled?"opciones OK":"sin opciones",x.congress?.signal && x.congress.signal!=="DEFERRED"?"Congreso "+x.congress.signal:"Congreso diferido"].filter(Boolean).join(" · ");
+        }));
+        for(const x of data){
           if(!x.confirmation)x.confirmation=confirmationFromSources(x.insider,x.institutional,x.congress,x.options);
         }
         return json({
