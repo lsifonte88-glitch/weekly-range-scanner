@@ -123,8 +123,7 @@ async function stooqOne(symbol) {
     const r=await fetchWithTimeout(url,{headers:{accept:'text/csv'}},3500);
     if(!r.ok)return {symbol,values:[]};
     const text=await r.text();
-    const lines=text.trim().split(/\r?
-/);
+    const lines=text.trim().split(/\r?\n/);
     if(lines.length<2)return {symbol,values:[]};
     const values=lines.slice(1).map(line=>{
       const p=line.split(',');
