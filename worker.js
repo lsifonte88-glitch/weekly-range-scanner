@@ -661,6 +661,13 @@ function earlySmartMoneyFromValues(v, source) {
   const totalVol=last20.reduce((s,x)=>s+x.volume,0);
   const vwap=totalVol?totalPV/totalVol:last.close;
   const vwapDistance=vwap?((last.close/vwap)-1)*100:0;
+  const rangeHigh=Math.max(...last20.map(x=>Number(x.high)||0));
+  const rangeLow=Math.min(...last20.map(x=>Number(x.low)||0));
+  const rangeWidth=rangeHigh-rangeLow;
+  const rangePosition=rangeWidth>0?((last.close-rangeLow)/rangeWidth)*100:50;
+  const prior20=v.slice(-21,-1);
+  const prior20High=prior20.length?Math.max(...prior20.map(x=>Number(x.high)||0)):rangeHigh;
+  const breakoutExtension=prior20High>0?((last.close/prior20High)-1)*100:0;
   const recent=v.slice(-10);
   let upDollar=0,downDollar=0;
   for(const x of recent){
@@ -708,6 +715,13 @@ function earlySmartMoneyFromValues(v, source) {
   if(p20>15){score-=15;reasons.push("subida 20D demasiado avanzada");}
   else if(p20>10){score-=8;reasons.push("subida 20D avanzada");}
 
+  // Penalización estructural: evita confundir una acción que ya está en la parte
+  // alta del rango con acumulación temprana, aunque su 5D todavía parezca moderado.
+  if(rangePosition>=90 && p5>2){score-=16;reasons.push("parte alta del rango");}
+  else if(rangePosition>=82 && p5>3){score-=10;reasons.push("rango avanzado");}
+  if(breakoutExtension>=2){score-=14;reasons.push("ruptura ya extendida");}
+  else if(breakoutExtension>=0.5){score-=6;reasons.push("sobre máximo previo");}
+
   if(vwapDistance>=-1&&vwapDistance<=2.5){score+=12;reasons.push("cerca de VWAP");}
   else if(vwapDistance>2.5&&vwapDistance<=5){score+=3;reasons.push("sobre VWAP moderadamente");}
   else if(vwapDistance>5&&vwapDistance<=7){score-=8;reasons.push("extendida sobre VWAP");}
@@ -716,7 +730,7 @@ function earlySmartMoneyFromValues(v, source) {
 
   score=Math.max(0,Math.min(100,Math.round(score)));
   const signal=score>=75?"EARLY_ACCUMULATION":score>=60?"DEVELOPING":score<=35?"LATE_OR_WEAK":"NEUTRAL";
-  return {signal,score,rvol,dollarRel,dollarImbalance,rvolAcceleration,priceChange3D:p3,priceChange5D:p5,priceChange10D:p10,priceChange20D:p20,vwap,vwapDistance,source,reasons,note:"Modelo de acumulación temprana basado en precio + volumen; penaliza extensión sobre VWAP y momentum ya avanzado; no identifica directamente al comprador institucional."};
+  return {signal,score,rvol,dollarRel,dollarImbalance,rvolAcceleration,priceChange3D:p3,priceChange5D:p5,priceChange10D:p10,priceChange20D:p20,vwap,vwapDistance,rangePosition,breakoutExtension,source,reasons,note:"Modelo de acumulación temprana basado en precio + volumen y estructura; penaliza precio en la parte alta del rango, ruptura ya extendida, distancia sobre VWAP y momentum avanzado; no identifica directamente al comprador institucional."};
 }
 async function smartMoneyFastData(symbol,env,secMap){
   // FAST mode: bounded subrequests for Cloudflare Workers.
