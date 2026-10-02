@@ -792,6 +792,22 @@ async function smartMoneyFastData(symbol,env,secMap){
     score=Math.min(score,55);
   }
   score=Math.max(0,Math.min(100,Math.round(score)));
+  // Final safety gate immediately before output: radar and detail cannot rescue an extended move.
+  const finalHardExtended =
+    Number(earlySmartMoney.rangePosition||0)>=90 && Number(earlySmartMoney.priceChange5D||0)>2 ||
+    Number(earlySmartMoney.breakoutExtension||0)>=2 ||
+    Number(earlySmartMoney.priceChange5D||0)>10 ||
+    Number(earlySmartMoney.priceChange20D||0)>15 ||
+    Number(earlySmartMoney.vwapDistance||0)>7;
+  const finalExtended =
+    Number(earlySmartMoney.rangePosition||0)>=82 && Number(earlySmartMoney.priceChange5D||0)>3 ||
+    Number(earlySmartMoney.breakoutExtension||0)>=0.5 ||
+    Number(earlySmartMoney.priceChange5D||0)>6 ||
+    Number(earlySmartMoney.priceChange20D||0)>10 ||
+    Number(earlySmartMoney.vwapDistance||0)>5;
+  if(finalHardExtended) score=Math.min(score,35);
+  else if(finalExtended) score=Math.min(score,55);
+  score=Math.max(0,Math.min(100,Math.round(score)));
   const flowDirection=confluence.direction==="INFLOW"?"INFLOW":confluence.direction==="OUTFLOW"?"OUTFLOW":marketFlow.signal;
   const reasons=[];
   if(marketFlow.rvol>=1.5) reasons.push("RVOL "+marketFlow.rvol.toFixed(2)+"x");
@@ -861,6 +877,22 @@ async function smartMoneyData(symbol,env,detail=false,institutionalSnap=[],issue
   }else if(extended){
     score=Math.min(score,55);
   }
+  score=Math.max(0,Math.min(100,Math.round(score)));
+  // Final safety gate immediately before output: radar and detail cannot rescue an extended move.
+  const finalHardExtended =
+    Number(earlySmartMoney.rangePosition||0)>=90 && Number(earlySmartMoney.priceChange5D||0)>2 ||
+    Number(earlySmartMoney.breakoutExtension||0)>=2 ||
+    Number(earlySmartMoney.priceChange5D||0)>10 ||
+    Number(earlySmartMoney.priceChange20D||0)>15 ||
+    Number(earlySmartMoney.vwapDistance||0)>7;
+  const finalExtended =
+    Number(earlySmartMoney.rangePosition||0)>=82 && Number(earlySmartMoney.priceChange5D||0)>3 ||
+    Number(earlySmartMoney.breakoutExtension||0)>=0.5 ||
+    Number(earlySmartMoney.priceChange5D||0)>6 ||
+    Number(earlySmartMoney.priceChange20D||0)>10 ||
+    Number(earlySmartMoney.vwapDistance||0)>5;
+  if(finalHardExtended) score=Math.min(score,35);
+  else if(finalExtended) score=Math.min(score,55);
   score=Math.max(0,Math.min(100,Math.round(score)));
   const flowDirection=confluence.direction==="INFLOW"?"INFLOW":confluence.direction==="OUTFLOW"?"OUTFLOW":marketFlow.signal;
   const freshness={market:marketFlow.source==="Unavailable"?"UNAVAILABLE":"DAILY",insider:cik?"RECENT":"UNAVAILABLE",institutional:institutional.filers?"LAGGED":"UNAVAILABLE",congress:congress.count?"LAGGED":"UNAVAILABLE",options:options.enabled?"RECENT":"UNAVAILABLE"};
