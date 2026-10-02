@@ -262,7 +262,7 @@ export default {
           sources:{
             sec:true,marketHistoryFallbacks:["Stooq","Yahoo Finance","Twelve Data"],
             options:"Yahoo Finance/Twelve Data on detail",institutional13F:"detail only",
-            congress:Boolean(env.QUIVER_API_KEY),"confirmationTopN":5
+            congress:Boolean(env.QUIVER_API_KEY),"confirmationTopN":3
           }
         });
       }
