@@ -542,7 +542,7 @@ async function sec13fRecent(cik,env,limit=2){
 }
 function parse13f(xml){
   const text=String(xml||"");
-  const rows=[...text.matchAll(/<(?:ns1:)?infoTable\b[^>]*>([\s\S]*?)</(?:ns1:)?infoTable>/gi)].map(m=>m[1]);
+  const rows=[...text.matchAll(/<(?:ns1:)?infoTable\b[^>]*>([\s\S]*?)<\/(?:ns1:)?infoTable>/gi)].map(m=>m[1]);
   return rows.map(row=>{
     const issuer=xmlText(row,"nameOfIssuer")||xmlText(row,"issuerName");
     const value=xmlNum(row,"value");
