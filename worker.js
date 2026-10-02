@@ -180,7 +180,7 @@ async function smartMoneyCandidates(env){
     .filter(x=>x && x!=="MSFT" && /^[A-Z0-9.-]+$/.test(x));
   // ETFs líquidos incluidos en el mismo radar; no reciben puntuación especial.
   const etfs=["QQQM","QQQ","SPY","VOO","VTI","IWM","DIA","XLK","SMH","SOXX","XLF","ARKK","TQQQ","SQQQ","SOXL","SOXS"];
-  const symbols=[...new Set([...candidates,...etfs])].slice(0,40);
+  const symbols=[...new Set([...candidates,...etfs])].slice(0,30);
   return {
     symbols,
     candidates:symbols.map(symbol=>({symbol,buckets:etfs.includes(symbol)?["ETF"]:["STOCK"],change:0,volume:0}))
@@ -254,20 +254,7 @@ export default {
           });
         }
         data.sort((a,b)=>(Number(b.score)||0)-(Number(a.score)||0));
-        const top5=data.slice(0,5);
-        let secMap={};
-        try{secMap=await secTickers(env);}catch(_){}
-        await Promise.all(top5.map(async x=>{
-          const cik=secMap[x.symbol];
-          if(cik){
-            x.insider=await insiderFastData(x.symbol,cik,env);
-            x.confirmation=confirmationFromSources(x.insider,x.institutional,x.congress,x.options);
-            x.dataQuality=[x.dataQuality||"",x.insider.signal==="UNAVAILABLE"?"SEC error":x.insider.count?"SEC Form 4":"sin Form 4"].filter(Boolean).join(" · ");
-          }else{
-            x.confirmation=confirmationFromSources(x.insider,x.institutional,x.congress,x.options);
-          }
-        }));
-        for(const x of data){
+        // Confirmación real solo para los 3 mejores candidatos.\n        // Con 30 símbolos + 5 screeners, este límite mantiene el Worker bajo el máximo\n        // de subrequests y permite consultar fuentes reales sin bloquear el radar.\n        const top3=data.slice(0,3);\n        let secMap={};\n        try{secMap=await secTickers(env);}catch(_){}\n        await Promise.all(top3.map(async x=>{\n          const cik=secMap[x.symbol];\n          try{\n            if(cik) x.insider=await insiderFastData(x.symbol,cik,env);\n            x.options=await yahooOptionsFlow(x.symbol,env) || {enabled:false,signal:"UNAVAILABLE",source:"Unavailable",note:"Yahoo options unavailable"};\n            if(env.QUIVER_API_KEY) x.congress=await congressData(x.symbol,env,false);\n            else x.congress={signal:"DEFERRED",count:0,buys:0,sells:0,events:[],note:"QUIVER_API_KEY no configurada."};\n          }catch(_){}\n          x.confirmation=confirmationFromSources(x.insider||{},x.institutional||{},x.congress||{},x.options||{});\n          x.dataQuality=[x.dataQuality||"",x.insider?.signal==="UNAVAILABLE"?"SEC error":x.insider?.count?"SEC Form 4":"sin Form 4",x.options?.enabled?"opciones OK":"sin opciones",x.congress?.signal && x.congress.signal!=="DEFERRED"?"Congreso "+x.congress.signal:"Congreso diferido"].filter(Boolean).join(" · ");\n        }));\n        for(const x of data){
           if(!x.confirmation)x.confirmation=confirmationFromSources(x.insider,x.institutional,x.congress,x.options);
         }
         return json({
