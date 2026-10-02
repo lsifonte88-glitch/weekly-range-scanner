@@ -837,11 +837,11 @@ async function smartMoneyFastData(symbol,env,secDirectory={},institutionalSnap=[
   const cik=secDirectory?.[symbol]?.cik;
   const institutional=institutionalForName(issuerName,institutionalSnap,false);
 
-  const history=await smartHistory(symbol,env,25);
-  const values=Array.isArray(history.values)&&history.values.length>=25?history.values:[];
-  const source=values.length?(history.source||"Unavailable"):"Unavailable";
-  const marketFlow=marketFlowFromValues(values,source);
-  const unusual=values.length?unusualFromValues(values.slice(-25),source):{signal:"UNAVAILABLE",score:0,rvol:0,source,note:"No hay histórico disponible"};
+  // FAST: no historical fetch per symbol. This prevents Cloudflare subrequest exhaustion.
+  const values=[];
+  const source="Unavailable";
+  const marketFlow={signal:"UNAVAILABLE",score:0,rvol:0,source,note:"Histórico omitido en FAST para preservar subrequests."};
+  const unusual={signal:"UNAVAILABLE",score:0,rvol:0,source,note:"Histórico omitido en FAST."};
 
   // These are deliberately context-only. They do not create the Smart Money score.
   const insider={signal:"DEFERRED",count:0,netValue:0,events:[],note:"Form 4 se confirma solo en el Top 3."};
