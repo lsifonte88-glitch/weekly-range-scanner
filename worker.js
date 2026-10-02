@@ -529,24 +529,14 @@ async function sec13fRecent(cik,env,limit=2){
     const reportDate=r.reportDate?.[i]||"", acc=r.accessionNumber?.[i], filingDate=r.filingDate?.[i]||"";
     if(!reportDate||!acc||seen.has(reportDate))continue;
     const base=SEC_WWW+"/Archives/edgar/data/"+String(Number(cik))+"/"+acc.replaceAll("-","");
-    const primary=String(r.primaryDocument?.[i]||"");
-    const dir=primary.includes("/")?primary.slice(0,primary.lastIndexOf("/")+1):"";
-    const candidates=[
-      dir+"infotable.xml",dir+"inftable.xml",dir+"form13fInfoTable.xml",
-      "infotable.xml","inftable.xml","form13fInfoTable.xml"
-    ].filter((x,n,a)=>x&&a.indexOf(x)===n);
-    let info="",doc=null;
-    for(const name of candidates){
-      const x=await secFetch(base+"/"+name,env);
-      if(x.status===200 && /<(?:(?:ns\\d+:)?infoTable)\\b/i.test(x.text)){
-        info=name;doc=x;break;
-      }
-    }
-    if(!doc)continue;
+    // The SEC submission text contains the 13F information table itself.
+    // Using the complete filing avoids guessing the auxiliary XML filename.
+    const doc=await secFetch(base+"/"+acc+".txt",env);
+    if(doc.status!==200)continue;
     const rows=parse13f(doc.text);
     if(!rows.length)continue;
     seen.add(reportDate);
-    out.push({cik,manager:j.name||"Institutional manager",filingDate,reportDate,accession:acc,url:base+"/"+info,xml:doc.text,rows});
+    out.push({cik,manager:j.name||"Institutional manager",filingDate,reportDate,accession:acc,url:base+"/"+acc+".txt",xml:doc.text,rows});
   }
   return out;
 }
