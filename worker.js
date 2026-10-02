@@ -208,7 +208,7 @@ export default {
         return new Response(await r.text(), { headers: { "content-type": "text/html; charset=UTF-8", "cache-control": "no-store" } });
       }
       if (url.pathname === "/smart-money.js") {
-        const r = await fetch("https://raw.githubusercontent.com/lsifonte88-glitch/weekly-range-scanner/main/smart-money.js?v=a582a70113e7a7143c18900f3fbf2f801d672714", { cf: { cacheTtl: 0 } });
+        const r = await fetch("https://raw.githubusercontent.com/lsifonte88-glitch/weekly-range-scanner/main/smart-money.js?v=5e62f38cb610b63d16d60b7d81ed777e352beccd", { cf: { cacheTtl: 0 } });
         if (!r.ok) return new Response("No se pudo cargar Smart Money.", { status: 502 });
         return new Response(await r.text(), { headers: { "content-type": "application/javascript; charset=UTF-8", "cache-control": "no-store" } });
       }
@@ -236,30 +236,70 @@ export default {
         const secMap = null;
         const data = [];
         if (!detail) {
-          const results=await Promise.allSettled(symbols.map(s=>smartMoneyFastData(s,env,null)));
-          for(let i=0;i<results.length;i++){
-            const r=results[i];
-            if(r.status==="fulfilled") data.push(r.value);
-            else data.push({symbol:symbols[i],score:50,flowDirection:"MIXED",marketFlow:{signal:"UNAVAILABLE",score:0,rvol:0,priceChange5D:0,dollarRel:0,note:"Proveedor no disponible en este ciclo"},confluence:{confidence:"BAJA"},reasons:["sin datos suficientes en este ciclo"],insider:{signal:"DEFERRED",count:0,netValue:0,note:"Diferido"},institutional:{signal:"DEFERRED",filers:0,note:"Diferido"},congress:{signal:"DEFERRED",count:0,note:"Diferido"},unusual:{signal:"UNAVAILABLE",score:0,rvol:0},options:{signal:"DEFERRED",enabled:false},etf:{signal:"DEFERRED"},dataQuality:"fallo aislado de proveedor",asOf:new Date().toISOString()});
-          }
-          return json({status:"ok",mode:"FAST_SUBREQUEST_SAFE",data,generatedAt:new Date().toISOString(),sources:{sec:true,marketHistoryFallbacks:["Stooq","Yahoo Finance","Twelve Data"],options:"Yahoo Finance",institutional13F:"deferred",congress:Boolean(env.QUIVER_API_KEY),etf:"deferred"}});
+        // FAST: primero calculamos oportunidad con histórico. Después confirmamos
+        // solo el Top 5 para mantener el radar dentro del límite de subrequests del plan Free.
+        const results=await Promise.allSettled(symbols.map(s=>smartMoneyFastData(s,env,null)));
+        for(let i=0;i<results.length;i++){
+          const r=results[i];
+          if(r.status==="fulfilled") data.push(r.value);
+          else data.push({
+            symbol:symbols[i],score:50,flowDirection:"MIXED",
+            marketFlow:{signal:"UNAVAILABLE",score:0,rvol:0,priceChange5D:0,dollarRel:0,note:"Proveedor no disponible en este ciclo"},
+            confluence:{confidence:"LOW"},reasons:["sin datos suficientes en este ciclo"],
+            insider:{signal:"DEFERRED",count:0,netValue:0,note:"Confirmación diferida al Top 5"},
+            institutional:{signal:"DEFERRED",filers:0,note:"13F disponible en DETALLES"},
+            congress:{signal:"DEFERRED",count:0,note:"Congreso disponible en DETALLES"},
+            unusual:{signal:"UNAVAILABLE",score:0,rvol:0},options:{signal:"DEFERRED",enabled:false},
+            etf:{signal:"DEFERRED"},dataQuality:"fallo aislado de proveedor",asOf:new Date().toISOString()
+          });
         }
+        data.sort((a,b)=>(Number(b.score)||0)-(Number(a.score)||0));
+        const top5=data.slice(0,5);
+        let secMap={};
+        try{secMap=await secTickers(env);}catch(_){}
+        await Promise.all(top5.map(async x=>{
+          const cik=secMap[x.symbol];
+          if(cik){
+            x.insider=await insiderFastData(x.symbol,cik,env);
+            x.confirmation=confirmationFromSources(x.insider,x.institutional,x.congress,x.options);
+            x.dataQuality=[x.dataQuality||"",x.insider.signal==="UNAVAILABLE"?"SEC error":x.insider.count?"SEC Form 4":"sin Form 4"].filter(Boolean).join(" · ");
+          }else{
+            x.confirmation=confirmationFromSources(x.insider,x.institutional,x.congress,x.options);
+          }
+        }));
+        for(const x of data){
+          if(!x.confirmation)x.confirmation=confirmationFromSources(x.insider,x.institutional,x.congress,x.options);
+        }
+        return json({
+          status:"ok",mode:"FAST_SUBREQUEST_SAFE",data,generatedAt:new Date().toISOString(),
+          sources:{
+            sec:true,marketHistoryFallbacks:["Stooq","Yahoo Finance","Twelve Data"],
+            options:"Yahoo Finance/Twelve Data on detail",institutional13F:"detail only",
+            congress:Boolean(env.QUIVER_API_KEY),"confirmationTopN":5
+          }
+        });
+      }
         // DETAIL_SAFE: un solo símbolo y solo dependencias acotadas.
         // No cargamos snapshots globales de 13F ni historial profundo de SEC aquí:
         // esas consultas pueden superar el límite de subrequests de Cloudflare.
         const detailSymbols = symbols.slice(0,1);
-        let resolvedSecMap = {};
-        try { resolvedSecMap = await secTickers(env); } catch (_) {}
+        let directory={}, resolvedSecMap={}, institutionalSnap=[];
+        try{
+          directory=await secTickerDirectory(env);
+          for(const [ticker,x] of Object.entries(directory))resolvedSecMap[ticker]=x.cik;
+        }catch(_){}
+        try{ institutionalSnap=await institutionalSnapshot(env); }catch(_){}
         for (const s of detailSymbols) {
           try {
-            data.push(await smartMoneyFastData(s,env,resolvedSecMap));
+            const issuerName=directory[s]?.name||s;
+            data.push(await smartMoneyData(s,env,true,institutionalSnap,issuerName,resolvedSecMap));
+            const x=data[data.length-1];
+            x.confirmation=confirmationFromSources(x.insider,x.institutional,x.congress,x.options);
+            x.dataQuality=[x.dataQuality||"",x.confirmation.signal].filter(Boolean).join(" · ");
           } catch (e) {
             data.push({
-              symbol:s,
-              score:50,
-              flowDirection:"MIXED",
-              error:e?.message||String(e),
-              mode:"DETAIL_SAFE"
+              symbol:s,score:50,flowDirection:"MIXED",error:e?.message||String(e),mode:"DETAIL_SAFE",
+              confirmation:{score:0,signal:"NO_CONFIRMATION",confidence:"LOW",evidence:[]}
             });
           }
         }
@@ -273,9 +313,9 @@ export default {
           sources:{
             sec:Boolean(Object.keys(resolvedSecMap).length),
             marketHistoryFallbacks:["Stooq","Yahoo Finance","Twelve Data"],
-            institutional13F:"DEFERRED",
-            congress:"DEFERRED",
-            options:"DEFERRED"
+            institutional13F:"SEC 13F managers: Berkshire, State Street, Vanguard, BlackRock",
+            congress:Boolean(env.QUIVER_API_KEY)?"Quiver Quantitative":"not configured",
+            options:"Twelve Data/Yahoo Finance"
           }
         });
       }
@@ -372,11 +412,19 @@ async function secFetch(url, env) {
   return {status:r.status, text};
 }
 
-async function secTickers(env) {
+async function secTickerDirectory(env) {
   const r = await secFetch(SEC_WWW+"/files/company_tickers.json", env);
   if(r.status!==200) throw new Error("SEC ticker map HTTP "+r.status);
   const j=JSON.parse(r.text), map={};
-  for(const k of Object.keys(j)){const x=j[k]; if(x?.ticker) map[String(x.ticker).toUpperCase()]=String(x.cik_str).padStart(10,"0");}
+  for(const k of Object.keys(j)){
+    const x=j[k];
+    if(x?.ticker) map[String(x.ticker).toUpperCase()]={cik:String(x.cik_str).padStart(10,"0"),name:String(x.title||"").trim()};
+  }
+  return map;
+}
+async function secTickers(env) {
+  const dir=await secTickerDirectory(env), map={};
+  for(const [ticker,x] of Object.entries(dir)) map[ticker]=x.cik;
   return map;
 }
 
@@ -414,12 +462,62 @@ async function insiderData(symbol,cik,env,detail=false){
   }
   const s=insiderSignal(events);
   return {...s,events:detail?events:[]};
+}async function insiderData(symbol,cik,env,detail=false){
+  const sub=await secFetch(SEC+"/submissions/CIK"+cik+".json",env);
+  if(sub.status!==200)return {signal:"NEUTRAL",count:0,netValue:0,events:[],error:"SEC submissions HTTP "+sub.status};
+  const j=JSON.parse(sub.text), r=j.filings?.recent||{}, events=[];
+  for(let i=0;i<(r.form||[]).length && events.length<8 && i<4;i++){
+    // Para mantener el radar dentro del límite de subrequests de Cloudflare,
+    // usamos primero Form 4, que concentra las operaciones reportadas de insiders.
+    if(r.form[i]!=="4")continue;
+    const accession=r.accessionNumber[i], primary=r.primaryDocument[i], filingDate=r.filingDate[i], reportDate=r.reportDate?.[i]||filingDate;
+    const url=SEC_WWW+"/Archives/edgar/data/"+String(Number(cik))+"/"+accession.replaceAll("-","")+"/"+primary;
+    const doc=await secFetch(url,env);
+    if(doc.status!==200)continue;
+    const xml=doc.text;
+    const names=[...xml.matchAll(/<issuerName[^>]*>([\s\S]*?)<\/issuerName>/gi)].map(m=>m[1].replace(/<[^>]+>/g,"").trim());
+    const rows=[...xml.matchAll(/<nonDerivativeTransaction>([\s\S]*?)<\/nonDerivativeTransaction>/gi)].map(m=>m[1]);
+    for(const row of rows.slice(0,6)){
+      const code=xmlText(row,"transactionCode").toUpperCase(), shares=xmlNum(row,"transactionShares"), price=xmlNum(row,"transactionPricePerShare");
+      let action=code==="P"?"BUY":code==="S"?"SELL":"OTHER";
+      if(action==="OTHER")continue;
+      events.push({source:"SEC Form "+r.form[i],date:reportDate,type:"INSIDER",actor:names[0]||symbol,action,shares,amount:shares*price,value:shares&&price?("$"+(shares*price).toFixed(0)):"",filingDate,url});
+    }
+  }
+  const s=insiderSignal(events);
+  return {...s,events:detail?events:[]};
+}
+async function insiderFastData(symbol,cik,env){
+  try{
+    const sub=await secFetch(SEC+"/submissions/CIK"+cik+".json",env);
+    if(sub.status!==200)return {signal:"UNAVAILABLE",count:0,netValue:0,events:[],note:"SEC submissions HTTP "+sub.status};
+    const j=JSON.parse(sub.text), r=j.filings?.recent||{};
+    let picked=-1;
+    for(let i=0;i<(r.form||[]).length;i++){ if(r.form[i]==="4"){picked=i;break;} }
+    if(picked<0)return {signal:"NEUTRAL",count:0,netValue:0,events:[],note:"SEC: sin Form 4 reciente."};
+    const accession=r.accessionNumber[picked], primary=r.primaryDocument[picked], filingDate=r.filingDate[picked], reportDate=r.reportDate?.[picked]||filingDate;
+    const url=SEC_WWW+"/Archives/edgar/data/"+String(Number(cik))+"/"+accession.replaceAll("-","")+"/"+primary;
+    const doc=await secFetch(url,env);
+    if(doc.status!==200)return {signal:"NEUTRAL",count:1,netValue:0,events:[],note:"SEC: Form 4 detectado, documento no disponible."};
+    const xml=doc.text, rows=[...xml.matchAll(/<nonDerivativeTransaction>([\s\S]*?)<\/nonDerivativeTransaction>/gi)].map(m=>m[1]);
+    const events=[];
+    for(const row of rows.slice(0,8)){
+      const code=xmlText(row,"transactionCode").toUpperCase(), shares=xmlNum(row,"transactionShares"), price=xmlNum(row,"transactionPricePerShare");
+      const action=code==="P"?"BUY":code==="S"?"SELL":"OTHER";
+      if(action==="OTHER")continue;
+      events.push({source:"SEC Form 4",date:reportDate,type:"INSIDER",actor:symbol,action,shares,amount:shares*price,value:shares&&price?("$"+(shares*price).toFixed(0)):"",filingDate,url});
+    }
+    const s=insiderSignal(events);
+    return {...s,events,note:events.length?"SEC Form 4: transacción reciente detectada.":"SEC Form 4 reciente sin compra/venta abierta P/S."};
+  }catch(e){return {signal:"UNAVAILABLE",count:0,netValue:0,events:[],note:"SEC error: "+(e?.message||String(e))};}
 }
 
 
 const INSTITUTIONAL_MANAGERS = [
   {cik:"0001067983",name:"Berkshire Hathaway"},
-  {cik:"0000093751",name:"State Street"} // kept as fallback identifier; SEC submissions are validated before use
+  {cik:"0000093751",name:"State Street"},
+  {cik:"0000102909",name:"Vanguard Group"},
+  {cik:"0001086364",name:"BlackRock"}
 ];
 
 function normName(s){
@@ -647,6 +745,22 @@ function confluenceScore(parts){
   const aligned=vals.filter(x=>x>0).length, opposed=vals.filter(x=>x<0).length;
   const confidence=aligned+opposed<2?"LOW":(aligned>=3||opposed>=3)?"HIGH":"MEDIUM";
   return {raw:s,direction:s>=3?"INFLOW":s<=-3?"OUTFLOW":"MIXED",confidence,aligned,opposed};
+}
+function confirmationFromSources(insider={},institutional={},congress={},options={}){
+  let raw=0,max=0,evidence=[];
+  if(insider.signal==="BUY"){raw+=2;max+=2;evidence.push("INSIDER BUY");}
+  else if(insider.signal==="SELL"){raw-=2;max+=2;evidence.push("INSIDER SELL");}
+  if(Number(institutional.score)>0){raw+=Math.min(2,Number(institutional.score));max+=2;evidence.push("13F INCREASED/NEW");}
+  else if(Number(institutional.score)<0){raw-=Math.min(2,Math.abs(Number(institutional.score)));max+=2;evidence.push("13F DECREASED/EXITED");}
+  if(congress.signal==="BUY"){raw+=1;max+=1;evidence.push("CONGRESS BUY");}
+  else if(congress.signal==="SELL"){raw-=1;max+=1;evidence.push("CONGRESS SELL");}
+  if(options.signal==="CALL_HEAVY"){raw+=1;max+=1;evidence.push("CALL HEAVY");}
+  else if(options.signal==="PUT_HEAVY"){raw-=1;max+=1;evidence.push("PUT HEAVY");}
+  if(!max)return {score:0,signal:"NO_CONFIRMATION",confidence:"LOW",evidence:[],note:"No hay evidencia institucional/insider/opciones/Congreso confirmable en este ciclo."};
+  const score=Math.max(0,Math.min(100,Math.round(50+(raw/max)*50)));
+  const signal=raw>0?"CONFIRMED_INFLOW":raw<0?"CONFIRMED_OUTFLOW":"MIXED";
+  const confidence=max>=4&&Math.abs(raw)>=3?"HIGH":max>=2?"MEDIUM":"LOW";
+  return {score,signal,confidence,evidence,note:"Confirmación separada del Opportunity Score; 13F es trimestral y rezagado."};
 }
 function earlySmartMoneyFromValues(v, source) {
   if (!Array.isArray(v) || v.length < 25) return {signal:"UNAVAILABLE",score:0,source,note:"Insufficient history"};
