@@ -651,26 +651,35 @@ function confluenceScore(parts){
 function earlySmartMoneyFromValues(v, source) {
   if (!Array.isArray(v) || v.length < 25) return {signal:"UNAVAILABLE",score:0,source,note:"Insufficient history"};
   const last=v.at(-1), prev=v.slice(0,-1);
-  const avgVol20=avg(prev.slice(-20).map(x=>x.volume)), rvol=avgVol20?last.volume/avgVol20:0;
-  const avgDollar20=avg(prev.slice(-20).map(x=>x.close*x.volume)), dollarRel=avgDollar20?(last.close*last.volume)/avgDollar20:0;
+  const avgVol20=avg(prev.slice(-20).map(x=>x.volume));
+  const rvol=avgVol20?last.volume/avgVol20:0;
+  const avgDollar20=avg(prev.slice(-20).map(x=>x.close*x.volume));
+  const dollarRel=avgDollar20?(last.close*last.volume)/avgDollar20:0;
   const p3=pct(last.close,v.at(-4)?.close),p5=pct(last.close,v.at(-6)?.close),p10=pct(last.close,v.at(-11)?.close),p20=pct(last.close,v.at(-21)?.close);
-  const last20=v.slice(-20),totalPV=last20.reduce((s,x)=>s+(((x.high+x.low+x.close)/3)*x.volume),0),totalVol=last20.reduce((s,x)=>s+x.volume,0);
-  const vwap=totalVol?totalPV/totalVol:last.close,vwapDistance=vwap?((last.close/vwap)-1)*100:0;
+  const last20=v.slice(-20);
+  const totalPV=last20.reduce((s,x)=>s+(((x.high+x.low+x.close)/3)*x.volume),0);
+  const totalVol=last20.reduce((s,x)=>s+x.volume,0);
+  const vwap=totalVol?totalPV/totalVol:last.close;
+  const vwapDistance=vwap?((last.close/vwap)-1)*100:0;
   const recent=v.slice(-10);
   let upDollar=0,downDollar=0;
-  for(const x of recent){const d=x.close*x.volume;if(x.close>x.open)upDollar+=d;else if(x.close<x.open)downDollar+=d;}
+  for(const x of recent){
+    const d=x.close*x.volume;
+    if(x.close>x.open) upDollar+=d;
+    else if(x.close<x.open) downDollar+=d;
+  }
   const dollarImbalance=upDollar+downDollar>0?(upDollar-downDollar)/(upDollar+downDollar):0;
   const rvolSeries=[];
   for(let i=Math.max(1,v.length-6);i<v.length;i++){
     const h=v.slice(Math.max(0,i-20),i),av=avg(h.map(x=>x.volume));
-    if(av>0)rvolSeries.push(v[i].volume/av);
+    if(av>0) rvolSeries.push(v[i].volume/av);
   }
-  const previousRVOL=avg(rvolSeries.slice(0,-1)),rvolAcceleration=previousRVOL>0?rvol/previousRVOL:1;
+  const previousRVOL=avg(rvolSeries.slice(0,-1));
+  const rvolAcceleration=previousRVOL>0?rvol/previousRVOL:1;
 
-  // El objetivo es detectar acumulación ANTES de la aceleración, no perseguir
-  // movimientos que ya están extendidos. La extensión sobre VWAP y el momentum
-  // excesivo reducen el score aunque el RVOL sea alto.
-  let score=0; const reasons=[];
+  let score=0;
+  const reasons=[];
+
   if(dollarRel>=1.15&&dollarRel<=2.5){score+=18;reasons.push("$ volumen creciendo");}
   else if(dollarRel>2.5&&dollarRel<=4){score+=8;reasons.push("$ volumen ya acelerado");}
   else if(dollarRel>4){score-=8;reasons.push("$ volumen demasiado acelerado");}
@@ -695,6 +704,7 @@ function earlySmartMoneyFromValues(v, source) {
 
   if(p10>=0&&p10<=6){score+=8;reasons.push("avance 10D contenido");}
   else if(p10>10){score-=8;reasons.push("avance 10D avanzado");}
+
   if(p20>15){score-=15;reasons.push("subida 20D demasiado avanzada");}
   else if(p20>10){score-=8;reasons.push("subida 20D avanzada");}
 
