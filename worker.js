@@ -541,14 +541,8 @@ async function sec13fRecent(cik,env,limit=2){
   return out;
 }
 function parse13f(xml){
-  // SEC complete-submission files wrap the information-table XML inside SGML.
-  // Strip SGML wrappers before parsing so the parser is independent of the
-  // filing's outer document formatting.
-  const text=String(xml||"")
-    .replace(/<SEC-HEADER>[\\s\\S]*?<\\/SEC-HEADER>/i,"")
-    .replace(/<DOCUMENT>[\\s\\S]*?<TYPE>13F-HR[\\s\\S]*?<\\/DOCUMENT>/i,"");
-
-  const rows=[...String(xml||"").matchAll(/<(?:ns1:)?infoTable\b[^>]*>([\s\S]*?)<\/(?:ns1:)?infoTable>/gi)].map(m=>m[1]);
+  const text=String(xml||"");
+  const rows=[...text.matchAll(/<(?:ns1:)?infoTable\\b[^>]*>([\\s\\S]*?)<\\/(?:ns1:)?infoTable>/gi)].map(m=>m[1]);
   return rows.map(row=>{
     const issuer=xmlText(row,"nameOfIssuer")||xmlText(row,"issuerName");
     const value=xmlNum(row,"value");
@@ -558,6 +552,7 @@ function parse13f(xml){
     return {issuer,value,shares,type,putCall};
   }).filter(x=>x.issuer);
 }
+
 async function institutionalSnapshot(env){
   const out=[];
   for(const m of INSTITUTIONAL_MANAGERS){
