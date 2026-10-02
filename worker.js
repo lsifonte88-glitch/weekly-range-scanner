@@ -704,7 +704,6 @@ async function smartMoneyFastData(symbol,env,secMap){
     congress:congress.signal==="BUY"?1:congress.signal==="SELL"?-1:0,
     options:options.signal==="CALL_HEAVY"?1:options.signal==="PUT_HEAVY"?-1:0
   };
-  const earlySmartMoney=earlySmartMoneyFromValues(history.values,history.source);
   const confluence=confluenceScore(component);
   // Opportunity score: prioriza acumulación temprana y potencial de movimiento.
   const earlyScore=Number(earlySmartMoney.score)||0;
@@ -753,6 +752,7 @@ async function smartMoneyData(symbol,env,detail=false,institutionalSnap=[],issue
     congress:congress.signal==="BUY"?1:congress.signal==="SELL"?-1:0,
     options:options.signal==="CALL_HEAVY"?1:options.signal==="PUT_HEAVY"?-1:0
   };
+  const earlySmartMoney=earlySmartMoneyFromValues(history.values,history.source);
   const confluence=confluenceScore(component);
   // Opportunity score: prioriza acumulación temprana y potencial de movimiento.
   const earlyScore=Number(earlySmartMoney.score)||0;
