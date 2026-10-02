@@ -438,7 +438,7 @@ async function secTickers(env) {
   return map;
 }
 
-function xmlText(xml, tag){const m=xml.match(new RegExp("<"+tag+"[^>]*>([\\s\\S]*?)</"+tag+">","i"));return m?m[1].replace(/<[^>]+>/g,"").trim():"";}
+function xmlText(xml, tag){const m=xml.match(new RegExp("<"+tag+"[^>]*>([\s\S]*?)</"+tag+">","i"));return m?m[1].replace(/<[^>]+>/g,"").trim():"";}
 function xmlNum(xml, tag){const x=xmlText(xml,tag).replace(/[$,]/g,"");const n=Number(x);return Number.isFinite(n)?n:0;}
 function xmlDate(xml,tag){return xmlText(xml,tag).slice(0,10);}
 function insiderSignal(events){
@@ -542,7 +542,7 @@ async function sec13fRecent(cik,env,limit=2){
 }
 function parse13f(xml){
   const text=String(xml||"");
-  const rows=[...text.matchAll(/<(?:ns1:)?infoTable\\b[^>]*>([\\s\\S]*?)<\\/(?:ns1:)?infoTable>/gi)].map(m=>m[1]);
+  const rows=[...text.matchAll(/<(?:ns1:)?infoTable\b[^>]*>([\s\S]*?)<\\/(?:ns1:)?infoTable>/gi)].map(m=>m[1]);
   return rows.map(row=>{
     const issuer=xmlText(row,"nameOfIssuer")||xmlText(row,"issuerName");
     const value=xmlNum(row,"value");
