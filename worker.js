@@ -416,7 +416,7 @@ const SEC = "https://data.sec.gov";
 const SEC_WWW = "https://www.sec.gov";
 
 async function secFetch(url, env) {
-  const ua = env.SEC_USER_AGENT || "WeeklyRangeScannerPRO/1.0";
+  const ua = env.SEC_USER_AGENT || "WeeklyRangeScannerPRO/1.0 (https://github.com/lsifonte88-glitch/weekly-range-scanner)";
   const r = await fetch(url, {headers:{accept:"application/json, application/xml, text/xml", "user-agent":ua}});
   const text = await r.text();
   return {status:r.status, text};
@@ -541,6 +541,13 @@ async function sec13fRecent(cik,env,limit=2){
   return out;
 }
 function parse13f(xml){
+  // SEC complete-submission files wrap the information-table XML inside SGML.
+  // Strip SGML wrappers before parsing so the parser is independent of the
+  // filing's outer document formatting.
+  const text=String(xml||"")
+    .replace(/<SEC-HEADER>[\\s\\S]*?<\\/SEC-HEADER>/i,"")
+    .replace(/<DOCUMENT>[\\s\\S]*?<TYPE>13F-HR[\\s\\S]*?<\\/DOCUMENT>/i,"");
+
   const rows=[...String(xml||"").matchAll(/<(?:ns1:)?infoTable\b[^>]*>([\s\S]*?)<\/(?:ns1:)?infoTable>/gi)].map(m=>m[1]);
   return rows.map(row=>{
     const issuer=xmlText(row,"nameOfIssuer")||xmlText(row,"issuerName");
@@ -554,7 +561,7 @@ function parse13f(xml){
 async function institutionalSnapshot(env){
   const out=[];
   for(const m of INSTITUTIONAL_MANAGERS){
-    const x=await sec13fRecent(m.cik,env,2);
+    const x=await sec13fRecent(m.cik,env,1);
     if(x.length)out.push(...x);
   }
   return out;
