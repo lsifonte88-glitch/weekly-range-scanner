@@ -252,7 +252,7 @@ export default {
         return new Response(await r.text(), { headers: { "content-type": "text/html; charset=UTF-8", "cache-control": "no-store" } });
       }
       if (url.pathname === "/smart-money.js") {
-        const r = await fetch("https://raw.githubusercontent.com/lsifonte88-glitch/weekly-range-scanner/main/smart-money.js?v=d2872e26f0eb765f044f36828cb2f7e3e4d86bd5", { cf: { cacheTtl: 0 } });
+        const r = await fetch("https://raw.githubusercontent.com/lsifonte88-glitch/weekly-range-scanner/main/smart-money.js?v=a582a70113e7a7143c18900f3fbf2f801d672714", { cf: { cacheTtl: 0 } });
         if (!r.ok) return new Response("No se pudo cargar Smart Money.", { status: 502 });
         return new Response(await r.text(), { headers: { "content-type": "application/javascript; charset=UTF-8", "cache-control": "no-store" } });
       }
