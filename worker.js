@@ -522,31 +522,40 @@ function nameMatches(a,b){
 async function sec13fRecent(cik,env,limit=2){
   const sub=await secFetch(SEC+"/submissions/CIK"+String(cik).padStart(10,"0")+".json",env);
   if(sub.status!==200)return [];
-  const j=JSON.parse(sub.text), r=j.filings?.recent||{}, out=[], seen=new Set();
+  let j; try{j=JSON.parse(sub.text);}catch(_){return [];}
+  const r=j.filings?.recent||{}, out=[], seen=new Set();
   for(let i=0;i<(r.form||[]).length && out.length<limit;i++){
     if(r.form[i]!=="13F-HR")continue;
-    const reportDate=r.reportDate?.[i]||"";
-    if(!reportDate||seen.has(reportDate))continue;
-    const acc=r.accessionNumber[i], filingDate=r.filingDate[i];
+    const reportDate=r.reportDate?.[i]||"", acc=r.accessionNumber?.[i], filingDate=r.filingDate?.[i]||"";
+    if(!reportDate||!acc||seen.has(reportDate))continue;
     const base=SEC_WWW+"/Archives/edgar/data/"+String(Number(cik))+"/"+acc.replaceAll("-","");
-    const idx=await secFetch(base+"/index.json",env);
-    let info="";
-    if(idx.status===200){
-      try{
-        const ij=JSON.parse(idx.text);
-        info=(ij.directory?.item||[]).map(x=>x.name||"").find(n=>/information.*table|infotable/i.test(n)&&/\.xml$/i.test(n))||"";
-      }catch(_){}
+    // SEC uses several valid names for the 13F information table.
+    // Try the common names directly first; this saves requests and avoids
+    // index.json/index-headers failures on Cloudflare.
+    const candidates=["infotable.xml","inftable.xml","form13fInfoTable.xml","informationtable.xml"];
+    let info="", doc=null;
+    for(const name of candidates){
+      const x=await secFetch(base+"/"+name,env);
+      if(x.status===200 && /<(?:(?:ns\d+:)?infoTable)\b/i.test(x.text)){
+        info=name; doc=x; break;
+      }
     }
-    if(!info){
-      const hdr=await secFetch(base+"/index-headers.html",env);
-      const m=hdr.text.match(/<FILENAME>([^<]*(?:information|info)[^<]*\.xml)/i);
-      if(m)info=m[1];
+    // Fallback: inspect the filing index only if the common filenames failed.
+    if(!doc){
+      const idx=await secFetch(base+"/index.json",env);
+      if(idx.status===200){
+        try{
+          const ij=JSON.parse(idx.text);
+          info=(ij.directory?.item||[]).map(x=>x.name||"").find(n=>/information.*table|infotable|inftable/i.test(n)&&/\.xml$/i.test(n))||"";
+        }catch(_){}
+      }
+      if(info) doc=await secFetch(base+"/"+info,env);
     }
-    if(!info)continue;
-    const doc=await secFetch(base+"/"+info,env);
-    if(doc.status!==200)continue;
+    if(!doc || doc.status!==200)continue;
+    const rows=parse13f(doc.text);
+    if(!rows.length)continue;
     seen.add(reportDate);
-    out.push({cik,manager:j.name||"Institutional manager",filingDate,reportDate,accession:acc,url:base+"/"+info,xml:doc.text,rows:parse13f(doc.text)});
+    out.push({cik,manager:j.name||"Institutional manager",filingDate,reportDate,accession:acc,url:base+"/"+info,xml:doc.text,rows});
   }
   return out;
 }
