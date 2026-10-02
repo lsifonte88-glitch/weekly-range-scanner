@@ -167,18 +167,16 @@ async function marketMovers(env, market, direction) {
 }
 
 async function smartMoneyCandidates(env){
-  // Twelve Data solo documenta gainers/losers en /market_movers; most_active no es
-  // una dirección soportada. Primero intentamos los dos rankings válidos.
-  const [g,l]=await Promise.all([
-    marketMovers(env,"stocks","gainers"),
-    marketMovers(env,"stocks","losers")
+  // Smart Money busca oportunidades de ganancia, no solo los mayores
+  // movimientos del día: ganadores + activos + crecimiento + small caps.
+  const sets=await Promise.all([
+    yahooScreener("day_gainers",100),
+    yahooScreener("most_actives",100),
+    yahooScreener("growth_technology_stocks",100),
+    yahooScreener("aggressive_small_caps",100),
+    yahooScreener("day_losers",50)
   ]);
-  const a={values:[]};
-  const buckets=[
-    ...(g.values||[]).map(x=>({...x,_bucket:"INFLOW"})),
-    ...(l.values||[]).map(x=>({...x,_bucket:"OUTFLOW"})),
-    ...(a.values||[]).map(x=>({...x,_bucket:"ACTIVE"}))
-  ];
+  const buckets=sets.flatMap((list,idx)=>(list||[]).map(x=>({...x,_bucket:["INFLOW","ACTIVE","GROWTH","SMALL_CAP","OUTFLOW"][idx]})));
   const by=new Map();
   for(const x of buckets){
     const symbol=String(x.symbol||x.ticker||"").trim().toUpperCase();
@@ -195,7 +193,7 @@ async function smartMoneyCandidates(env){
     if(!row.buckets.includes(bucket))row.buckets.push(bucket);
   }
 
-  let rows=[...by.values()].sort((a,b)=>b._score-a._score).slice(0,32);
+  let rows=[...by.values()].sort((a,b)=>b._score-a._score).slice(0,40);
 
   // Fallback: Twelve Data puede no devolver market_movers en cuentas/endpoints
   // donde esa ruta no está habilitada. Yahoo ya se usa en /prefilter y permite
@@ -749,8 +747,12 @@ async function smartMoneyFastData(symbol,env,secMap){
     options:options.signal==="CALL_HEAVY"?1:options.signal==="PUT_HEAVY"?-1:0
   };
   const confluence=confluenceScore(component);
-  let score=50+confluence.raw*7;
-  score += unusual.score>0?Math.min(10,Math.round(unusual.score/5)):Math.max(-10,Math.round(unusual.score/5));
+  // Opportunity score: prioriza acumulación temprana y potencial de movimiento.
+  const earlyScore=Number(earlySmartMoney.score)||0;
+  const marketScore=Math.max(0,Math.min(100,50+(Number(marketFlow.score)||0)*12.5));
+  const unusualScore=Math.max(0,Math.min(100,50+(Number(unusual.score)||0)/2));
+  const confluenceScore100=Math.max(0,Math.min(100,50+(Number(confluence.raw)||0)*12.5));
+  let score=earlyScore*0.45 + marketScore*0.25 + unusualScore*0.15 + confluenceScore100*0.15;
   score=Math.max(0,Math.min(100,Math.round(score)));
   const flowDirection=confluence.direction==="INFLOW"?"INFLOW":confluence.direction==="OUTFLOW"?"OUTFLOW":marketFlow.signal;
   const reasons=[];
@@ -793,8 +795,12 @@ async function smartMoneyData(symbol,env,detail=false,institutionalSnap=[],issue
     options:options.signal==="CALL_HEAVY"?1:options.signal==="PUT_HEAVY"?-1:0
   };
   const confluence=confluenceScore(component);
-  let score=50+confluence.raw*7;
-  score += unusual.score>0?Math.min(10,Math.round(unusual.score/5)):Math.max(-10,Math.round(unusual.score/5));
+  // Opportunity score: prioriza acumulación temprana y potencial de movimiento.
+  const earlyScore=Number(earlySmartMoney.score)||0;
+  const marketScore=Math.max(0,Math.min(100,50+(Number(marketFlow.score)||0)*12.5));
+  const unusualScore=Math.max(0,Math.min(100,50+(Number(unusual.score)||0)/2));
+  const confluenceScore100=Math.max(0,Math.min(100,50+(Number(confluence.raw)||0)*12.5));
+  let score=earlyScore*0.45 + marketScore*0.25 + unusualScore*0.15 + confluenceScore100*0.15;
   score=Math.max(0,Math.min(100,Math.round(score)));
   const flowDirection=confluence.direction==="INFLOW"?"INFLOW":confluence.direction==="OUTFLOW"?"OUTFLOW":marketFlow.signal;
   const freshness={market:marketFlow.source==="Unavailable"?"UNAVAILABLE":"DAILY",insider:cik?"RECENT":"UNAVAILABLE",institutional:institutional.filers?"LAGGED":"UNAVAILABLE",congress:congress.count?"LAGGED":"UNAVAILABLE",options:options.enabled?"RECENT":"UNAVAILABLE"};
