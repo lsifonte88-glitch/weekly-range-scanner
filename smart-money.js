@@ -36,7 +36,7 @@ function smRenderSummary(data){
 function smRenderRows(data){
   smRenderSummary(data);
   const rows=document.getElementById("smRows"); if(!rows)return;
-  if(!Array.isArray(data)||!data.length){rows.innerHTML='<tr><td colspan="15" class="loading">Sin datos.</td></tr>';return;}
+  if(!Array.isArray(data)||!data.length){rows.innerHTML='<tr><td colspan="16" class="loading">Sin datos.</td></tr>';return;}
   rows.innerHTML=data.map((x,i)=>{
     const score=Number(x.score)||0, flow=x.flowDirection||"MIXED", mf=x.marketFlow||{}, insider=x.insider||{}, institutional=x.institutional||{}, congress=x.congress||{}, unusual=x.unusual||{}, etf=x.etf||{}, options=x.options||{}, conf=x.confluence||{}, confirmation=x.confirmation||{};
     return `<tr><td><b>${i+1}</b></td><td><b>${smEscape(x.symbol)}</b></td><td><span class="score ${score>=70?'green':score<=30?'red':'yellow'}">${score}</span><br><span class="small">OPPORTUNITY</span></td><td><span class="score ${Number(confirmation.score||0)>=70?'green':Number(confirmation.score||0)>=50?'yellow':'red'}">${Number(confirmation.score||0)}</span><br><span class="small">${smEscape(confirmation.signal||"NO_CONFIRMATION")}</span></td><td>${smBadge(flow)}<br><span class="small">conf. ${smEscape(conf.confidence||"—")}</span></td><td>${smBadge(mf.signal||"UNAVAILABLE")}<br><span class="small">RVOL ${Number(mf.rvol||0).toFixed(2)}x · 5D ${Number(mf.priceChange5D||0).toFixed(1)}%</span></td><td>${smBadge(insider.signal)}<br><span class="small">${insider.count||0} · ${smMoney(insider.netValue||0)}</span></td><td>${smBadge(institutional.signal)}<br><span class="small">${institutional.filers||0} managers · LAGGED</span></td><td>${smBadge(congress.signal)}<br><span class="small">${congress.count||0} ops</span></td><td>${smBadge(unusual.signal)}<br><span class="small">RVOL ${Number(unusual.rvol||0).toFixed(2)}x</span></td><td>${smBadge(etf.signal)}</td><td>${smBadge(options.signal||"OFF")}<br><span class="small">C/P ${options.callPutRatio==null?'—':Number(options.callPutRatio).toFixed(2)+'x'}</span></td><td><span class="small">${smEscape((x.reasons||[]).join(" · "))}</span></td><td><span class="small">${smEscape((x.dataQuality||""))}</span></td><td><span class="small">${smEscape(x.asOf||"")}</span></td><td><button type="button" class="smDetailBtn" data-symbol="${smEscape(x.symbol)}">DETALLES</button></td></tr>`;
@@ -52,7 +52,7 @@ async function smLoad(){
   const input=document.getElementById("symbols"),status=document.getElementById("smStatus"),rows=document.getElementById("smRows");
   if(!input||!status||!rows)return;
   status.textContent="Detectando dónde se está moviendo el dinero ahora…";
-  rows.innerHTML='<tr><td colspan="15" class="loading">Buscando ganadores, perdedores y mayor actividad del mercado…</td></tr>';
+  rows.innerHTML='<tr><td colspan="16" class="loading">Buscando ganadores, perdedores y mayor actividad del mercado…</td></tr>';
   try{
     let dj;
     // Ruta crítica: /prefilter ya entrega ganadores, perdedores y mayor actividad
@@ -76,7 +76,7 @@ async function smLoad(){
     all.sort((a,b)=>(Number(b.score)||0)-(Number(a.score)||0));
     smRenderRows(all.slice(0,25));
     status.textContent="Radar terminado · "+all.length+" movimientos relevantes detectados · mostrando Top 25";
-  }catch(e){console.error("SMART MONEY ERROR:",e);status.textContent="ERROR: "+e.message;rows.innerHTML=`<tr><td colspan="15" class="red">${smEscape(e.message)}</td></tr>`}
+  }catch(e){console.error("SMART MONEY ERROR:",e);status.textContent="ERROR: "+e.message;rows.innerHTML=`<tr><td colspan="16" class="red">${smEscape(e.message)}</td></tr>`}
 }
 
 async function smDetails(symbol){
