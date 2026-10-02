@@ -167,65 +167,23 @@ async function marketMovers(env, market, direction) {
 }
 
 async function smartMoneyCandidates(env){
-  // Smart Money busca oportunidades de ganancia, no solo los mayores
-  // movimientos del día: ganadores + activos + crecimiento + small caps.
+  // Universo amplio: acciones + ETFs. Smart Money debe comparar oportunidad,
+  // no depender únicamente de los mayores ganadores/perdedores del día.
   const sets=await Promise.all([
-    yahooScreener("day_gainers",100),
-    yahooScreener("most_actives",100),
-    yahooScreener("growth_technology_stocks",100),
-    yahooScreener("aggressive_small_caps",100),
-    yahooScreener("day_losers",50)
+    yahooScreener("day_gainers",150),
+    yahooScreener("most_actives",150),
+    yahooScreener("growth_technology_stocks",150),
+    yahooScreener("aggressive_small_caps",150),
+    yahooScreener("day_losers",100)
   ]);
-  const buckets=sets.flatMap((list,idx)=>(list||[]).map(x=>({...x,_bucket:["INFLOW","ACTIVE","GROWTH","SMALL_CAP","OUTFLOW"][idx]})));
-  const by=new Map();
-  for(const x of buckets){
-    const symbol=String(x.symbol||x.ticker||"").trim().toUpperCase();
-    if(!symbol||symbol==="MSFT"||!/^[A-Z0-9.-]+$/.test(symbol))continue;
-    const rawChange=Number(x.percent_change ?? x.change_percent ?? x.change ?? 0) || 0;
-    const change=Math.abs(rawChange);
-    const volume=Number(x.volume||x.average_volume||0)||0;
-    const score=change*2+(volume>0?Math.log10(volume):0);
-    const inferred=rawChange>0?"INFLOW":rawChange<0?"OUTFLOW":"ACTIVE";
-    const bucket=inferred;
-    const prev=by.get(symbol);
-    if(!prev||score>prev._score)by.set(symbol,{symbol,buckets:[],change:rawChange,volume,_score:score});
-    const row=by.get(symbol);
-    if(!row.buckets.includes(bucket))row.buckets.push(bucket);
-  }
-
-  let rows=[...by.values()].sort((a,b)=>b._score-a._score).slice(0,40);
-
-  // Fallback: Twelve Data puede no devolver market_movers en cuentas/endpoints
-  // donde esa ruta no está habilitada. Yahoo ya se usa en /prefilter y permite
-  // mantener el radar dinámico sin una lista fija.
-  if(!rows.length){
-    const yahoo=await Promise.all([
-      yahooScreener("day_gainers",100),
-      yahooScreener("day_losers",100),
-      yahooScreener("most_actives",100)
-    ]);
-    const yb=new Map();
-    for(const list of yahoo){
-      for(const x of list||[]){
-        const symbol=String(x.symbol||"").trim().toUpperCase();
-        if(!symbol||symbol==="MSFT"||!/^[A-Z0-9.-]+$/.test(symbol))continue;
-        const rawChange=Number(x.regularMarketChangePercent||0)||0;
-        const change=Math.abs(rawChange);
-        const volume=Number(x.regularMarketVolume||x.averageDailyVolume3Month||0)||0;
-        const score=change*2+(volume>0?Math.log10(volume):0);
-        const bucket=rawChange>0?"INFLOW":rawChange<0?"OUTFLOW":"ACTIVE";
-        const prev=yb.get(symbol);
-        if(!prev||score>prev._score)yb.set(symbol,{symbol,buckets:[],change:rawChange,volume,_score:score});
-        const row=yb.get(symbol);
-        if(!row.buckets.includes(bucket))row.buckets.push(bucket);
-      }
-    }
-    rows=[...yb.values()].sort((a,b)=>b._score-a._score).slice(0,32);
-  }
-
+  const candidates=sets.flat().map(x=>String(x.symbol||x.ticker||"").trim().toUpperCase())
+    .filter(x=>x && x!=="MSFT" && /^[A-Z0-9.-]+$/.test(x));
+  // ETFs líquidos incluidos en el mismo radar; no reciben puntuación especial.
+  const etfs=["QQQM","QQQ","SPY","VOO","VTI","IWM","DIA","XLK","SMH","SOXX","XLF","ARKK","TQQQ","SQQQ","SOXL","SOXS"];
+  const symbols=[...new Set([...candidates,...etfs])].slice(0,40);
   return {
-    symbols:rows.map(x=>x.symbol),
-    candidates:rows.map(({symbol,buckets,change,volume})=>({symbol,buckets,change,volume}))
+    symbols,
+    candidates:symbols.map(symbol=>({symbol,buckets:etfs.includes(symbol)?["ETF"]:["STOCK"],change:0,volume:0}))
   };
 }
 
@@ -746,6 +704,7 @@ async function smartMoneyFastData(symbol,env,secMap){
     congress:congress.signal==="BUY"?1:congress.signal==="SELL"?-1:0,
     options:options.signal==="CALL_HEAVY"?1:options.signal==="PUT_HEAVY"?-1:0
   };
+  const earlySmartMoney=earlySmartMoneyFromValues(history.values,history.source);
   const confluence=confluenceScore(component);
   // Opportunity score: prioriza acumulación temprana y potencial de movimiento.
   const earlyScore=Number(earlySmartMoney.score)||0;
@@ -813,6 +772,5 @@ async function smartMoneyData(symbol,env,detail=false,institutionalSnap=[],issue
   if(congress.signal!=="NEUTRAL") reasons.push("Congreso "+congress.signal);
   if(options.signal==="CALL_HEAVY"||options.signal==="PUT_HEAVY") reasons.push("opciones "+options.signal);
   if(!reasons.length) reasons.push("sin confluencia direccional suficiente");
-  const earlySmartMoney=earlySmartMoneyFromValues(history.values,history.source);
   return {symbol,score,flowDirection,marketFlow,earlySmartMoney,confluence,reasons,insider,institutional,congress,unusual,options,etf,technical,freshness,dataQuality,asOf:new Date().toISOString(),events:detail?[...(insider.events||[]),...(institutional.events||[]),...(congress.events||[])]:[]};
 }
