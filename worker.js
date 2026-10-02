@@ -529,29 +529,20 @@ async function sec13fRecent(cik,env,limit=2){
     const reportDate=r.reportDate?.[i]||"", acc=r.accessionNumber?.[i], filingDate=r.filingDate?.[i]||"";
     if(!reportDate||!acc||seen.has(reportDate))continue;
     const base=SEC_WWW+"/Archives/edgar/data/"+String(Number(cik))+"/"+acc.replaceAll("-","");
-    // SEC uses several valid names for the 13F information table.
-    // Try the common names directly first; this saves requests and avoids
-    // index.json/index-headers failures on Cloudflare.
-    const candidates=["infotable.xml","inftable.xml","form13fInfoTable.xml","informationtable.xml"];
-    let info="", doc=null;
+    const primary=String(r.primaryDocument?.[i]||"");
+    const dir=primary.includes("/")?primary.slice(0,primary.lastIndexOf("/")+1):"";
+    const candidates=[
+      dir+"infotable.xml",dir+"inftable.xml",dir+"form13fInfoTable.xml",
+      "infotable.xml","inftable.xml","form13fInfoTable.xml"
+    ].filter((x,n,a)=>x&&a.indexOf(x)===n);
+    let info="",doc=null;
     for(const name of candidates){
       const x=await secFetch(base+"/"+name,env);
-      if(x.status===200 && /<(?:(?:ns\d+:)?infoTable)\b/i.test(x.text)){
-        info=name; doc=x; break;
+      if(x.status===200 && /<(?:(?:ns\\d+:)?infoTable)\\b/i.test(x.text)){
+        info=name;doc=x;break;
       }
     }
-    // Fallback: inspect the filing index only if the common filenames failed.
-    if(!doc){
-      const idx=await secFetch(base+"/index.json",env);
-      if(idx.status===200){
-        try{
-          const ij=JSON.parse(idx.text);
-          info=(ij.directory?.item||[]).map(x=>x.name||"").find(n=>/information.*table|infotable|inftable/i.test(n)&&/\.xml$/i.test(n))||"";
-        }catch(_){}
-      }
-      if(info) doc=await secFetch(base+"/"+info,env);
-    }
-    if(!doc || doc.status!==200)continue;
+    if(!doc)continue;
     const rows=parse13f(doc.text);
     if(!rows.length)continue;
     seen.add(reportDate);
