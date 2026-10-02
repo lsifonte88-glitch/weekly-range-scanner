@@ -416,7 +416,7 @@ const SEC = "https://data.sec.gov";
 const SEC_WWW = "https://www.sec.gov";
 
 async function secFetch(url, env) {
-  const ua = env.SEC_USER_AGENT || "WeeklyRangeScannerPRO/1.0 contact@example.com";
+  const ua = env.SEC_USER_AGENT || "WeeklyRangeScannerPRO/1.0";
   const r = await fetch(url, {headers:{accept:"application/json, application/xml, text/xml", "user-agent":ua}});
   const text = await r.text();
   return {status:r.status, text};
