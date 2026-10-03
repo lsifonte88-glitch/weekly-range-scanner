@@ -263,10 +263,8 @@ export default {
         // Con 30 símbolos + 5 screeners, este límite mantiene el Worker bajo el máximo
         // de subrequests y permite consultar fuentes reales sin bloquear el radar.
         const top3=data.slice(0,3);
-        let secMap={};
-        try{secMap=await secTickers(env);}catch(_){}
         await Promise.all(top3.map(async x=>{
-          const cik=secMap[x.symbol];
+          const cik=secDirectory?.[x.symbol]?.cik;
           try{
             if(cik) x.insider=await insiderFastData(x.symbol,cik,env);
             x.options=await yahooOptionsFlow(x.symbol,env) || {enabled:false,signal:"UNAVAILABLE",source:"Unavailable",note:"Yahoo options unavailable"};
@@ -555,7 +553,7 @@ function parse13f(xml){
 async function institutionalSnapshot(env){
   const out=[];
   for(const m of INSTITUTIONAL_MANAGERS){
-    const x=await sec13fRecent(m.cik,env,1);
+    const x=await sec13fRecent(m.cik,env,2);
     if(x.length)out.push(...x);
   }
   return out;
@@ -823,27 +821,26 @@ function earlySmartMoneyFromValues(v, source) {
   return {signal,score,rvol,dollarRel,dollarImbalance,rvolAcceleration,priceChange3D:p3,priceChange5D:p5,priceChange10D:p10,priceChange20D:p20,vwap,vwapDistance,rangePosition,breakoutExtension,source,reasons,note:"Modelo de acumulación temprana basado en precio + volumen y estructura; penaliza precio en la parte alta del rango, ruptura ya extendida, distancia sobre VWAP y momentum avanzado; no identifica directamente al comprador institucional."};
 }
 async function smartMoneyFastData(symbol,env,secDirectory={},institutionalSnap=[]){
-  // SMART MONEY = evidencia independiente. NO reutiliza earlySmartMoney para puntuar.
+  // RADAR: el FAST debe detectar movimiento temprano usando precio/volumen.
+  // La evidencia institucional/insider se mantiene separada y se confirma después.
   const issuerName=secDirectory?.[symbol]?.name||symbol;
   const cik=secDirectory?.[symbol]?.cik;
   const institutional=institutionalForName(issuerName,institutionalSnap,false);
 
-  // FAST: no historical fetch per symbol. This prevents Cloudflare subrequest exhaustion.
-  const values=[];
-  const source="Unavailable";
-  const marketFlow={signal:"UNAVAILABLE",score:0,rvol:0,source,note:"Histórico omitido en FAST para preservar subrequests."};
-  const unusual={signal:"UNAVAILABLE",score:0,rvol:0,source,note:"Histórico omitido en FAST."};
+  // Un histórico diario por símbolo. Stooq suele resolverlo en una sola petición;
+  // Yahoo/Twelve Data quedan como fallback dentro de smartHistory().
+  const history=await smartHistory(symbol,env,25);
+  const values=Array.isArray(history.values)?history.values:[];
+  const source=history.source||"Unavailable";
+  const marketFlow=marketFlowFromValues(values,source);
+  const unusual=values.length?unusualFromValues(values.slice(-25),source):{signal:"UNAVAILABLE",score:0,rvol:0,source,note:"No hay histórico disponible"};
+  const earlySmartMoney=values.length?earlySmartMoneyFromValues(values,source):{signal:"UNAVAILABLE",score:0,source,note:"No hay histórico disponible"};
 
-  // These are deliberately context-only. They do not create the Smart Money score.
   const insider={signal:"DEFERRED",count:0,netValue:0,events:[],note:"Form 4 se confirma solo en el Top 3."};
   const options={enabled:false,signal:"DEFERRED",expiration:"",contracts:0,callVolume:0,putVolume:0,callOpenInterest:0,putOpenInterest:0,callPutRatio:null,callPutOIRatio:null,source:"Deferred",note:"Opciones se confirman solo en el Top 3."};
   const congress={signal:"DEFERRED",count:0,buys:0,sells:0,events:[],note:"Congreso se confirma solo en el Top 3."};
 
-  // Institutional evidence:
-  //  - managers holding = footprint
-  //  - increased/new = positive
-  //  - decreased/exited = negative
-  // No 13F evidence means score 0, not a synthetic score from price/volume.
+  // 13F es evidencia institucional rezagada; no se mezcla con el detector temprano.
   const managers=Number(institutional.filers||0);
   const institutionalDelta=Number(institutional.score||0);
   let institutionalScore=0;
@@ -852,11 +849,23 @@ async function smartMoneyFastData(symbol,env,secDirectory={},institutionalSnap=[
     institutionalScore=Math.max(0,Math.min(100,Math.round(institutionalScore)));
   }
 
+  // Opportunity = probabilidad/estructura de movimiento temprano basada en precio+volumen.
+  // smartMoneyScore = evidencia institucional disponible. Son métricas distintas.
+  const opportunityScore=Number(earlySmartMoney.score||0);
+  const flowDirection=marketFlow.signal==="STRONG_INFLOW"||marketFlow.signal==="INFLOW"
+    ?"INFLOW":marketFlow.signal==="STRONG_OUTFLOW"||marketFlow.signal==="OUTFLOW"
+    ?"OUTFLOW":"MIXED";
+  const reasons=[...(earlySmartMoney.reasons||[])];
+  if(marketFlow.signal&&marketFlow.signal!=="UNAVAILABLE") reasons.push("Market Flow: "+marketFlow.signal);
+  if(institutional.filers) reasons.push("13F: "+institutional.filers+" managers · "+institutional.signal);
+  if(!reasons.length) reasons.push("Sin datos suficientes en este ciclo");
+
   return {
     symbol,
-    score:institutionalScore,
+    score:opportunityScore,
+    opportunityScore,
     smartMoneyScore:institutionalScore,
-    flowDirection:institutional.signal==="BUY"?"CONFIRMED_INFLOW":institutional.signal==="SELL"?"CONFIRMED_OUTFLOW":"NO_INSTITUTIONAL_SIGNAL",
+    flowDirection,
     institutional,
     marketFlow,
     unusual,
@@ -864,15 +873,13 @@ async function smartMoneyFastData(symbol,env,secDirectory={},institutionalSnap=[
     congress,
     options,
     confirmation:{score:0,signal:"NO_CONFIRMATION",confidence:"LOW",evidence:[],note:"La confirmación SEC/Form 4, opciones y Congreso se ejecuta después sobre el Top 3."},
-    reasons:institutional.filers
-      ? ["13F: "+institutional.filers+" managers","13F: "+institutional.signal+(institutionalDelta>0?" · aumento/nueva posición":institutionalDelta<0?" · reducción/salida":" · sin cambio relevante")]
-      : ["Sin evidencia 13F en los managers configurados"],
+    reasons,
     etf:{signal:"DEFERRED",holdings:[],note:"Composición ETF no participa en el score."},
-    technical:{signal:marketFlow.signal.includes("INFLOW")?"BULLISH_FLOW":marketFlow.signal.includes("OUTFLOW")?"BEARISH_FLOW":"MIXED"},
-    earlySmartMoney:values.length?earlySmartMoneyFromValues(values,source):{signal:"UNAVAILABLE",score:0},
+    technical:{signal:flowDirection==="INFLOW"?"BULLISH_FLOW":flowDirection==="OUTFLOW"?"BEARISH_FLOW":"MIXED"},
+    earlySmartMoney,
     freshness:{market:source==="Unavailable"?"UNAVAILABLE":"DAILY",insider:"DEFERRED",institutional:institutional.filers?"LAGGED":"UNAVAILABLE",congress:"DEFERRED",options:"DEFERRED"},
-    dataQuality:[institutional.filers?institutional.filers+" 13F":"sin 13F", "market flow "+(source!=="Unavailable"?source:"unavailable"),"Form 4 diferido","opciones diferidas","Congreso diferido"].join(" · "),
-    mode:"FAST_EVIDENCE_FIRST",
+    dataQuality:[institutional.filers?institutional.filers+" 13F":"sin 13F","market flow "+(source!=="Unavailable"?source:"unavailable"),"Form 4 diferido","opciones diferidas","Congreso diferido"].join(" · "),
+    mode:"FAST_EARLY_FLOW",
     asOf:new Date().toISOString(),
     events:[]
   };
