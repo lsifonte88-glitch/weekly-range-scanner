@@ -233,7 +233,6 @@ export default {
         const symbols = cleanSymbols(url.searchParams.get("symbols") || url.searchParams.get("symbol"));
         if (!symbols.length) return json({status:"error",message:"Falta symbol o symbols."},400);
         const detail = url.searchParams.get("detail")==="1";
-        const secMap = null;
         const data = [];
         if (!detail) {
         // FAST: Smart Money is evidence-first. 13F is loaded once for the whole radar;
