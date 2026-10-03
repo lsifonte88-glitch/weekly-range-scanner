@@ -717,9 +717,10 @@ function marketFlowFromValues(v,source){
   score=Math.max(-5,Math.min(5,score));
 
   let signal;
+  // Divergencia real = actividad anormal. Un score 0 sin divergencia es simplemente neutral.
   if(imbalance<=-0.20 && p5>0) signal="ABNORMAL_ACTIVITY";
   else if(imbalance>=0.20 && p5<0) signal="ABNORMAL_ACTIVITY";
-  else signal=score>=3?"STRONG_INFLOW":score>=1?"INFLOW":score<=-3?"STRONG_OUTFLOW":score<=-1?"OUTFLOW":"ABNORMAL_ACTIVITY";
+  else signal=score>=3?"STRONG_INFLOW":score>=1?"INFLOW":score<=-3?"STRONG_OUTFLOW":score<=-1?"OUTFLOW":"NEUTRAL";
   return {signal,score,rvol,dollarRel,priceChange5D:p5,priceChange20D:p20,volumeImbalance:imbalance,source,asOf:last.datetime||"",note:"Proxy precio + volumen; no identifica por sí solo al comprador institucional."};
 }
 async function marketFlowData(symbol,env,history=null){
