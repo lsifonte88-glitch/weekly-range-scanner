@@ -704,9 +704,22 @@ function marketFlowFromValues(v,source){
   const p5=pct(last.close,v.at(-6)?.close), p20=pct(last.close,v.at(-21)?.close);
   const upVol=v.slice(-20).filter(x=>x.close>x.open).reduce((s,x)=>s+x.volume,0), downVol=v.slice(-20).filter(x=>x.close<x.open).reduce((s,x)=>s+x.volume,0);
   const imbalance=(upVol+downVol)?(upVol-downVol)/(upVol+downVol):0;
-  let score=0; score += p5>0?1:-1; score += p20>0?1:-1; score += imbalance>0.12?1:imbalance<-0.12?-1:0; score += rvol>=1.5?(p5>=0?1:-1):0;
-  score=Math.max(-4,Math.min(4,score));
-  const signal=score>=3?"STRONG_INFLOW":score>=1?"INFLOW":score<=-3?"STRONG_OUTFLOW":score<=-1?"OUTFLOW":"ABNORMAL_ACTIVITY";
+  // El desequilibrio de volumen/dólares tiene más peso que el precio cuando hay divergencia.
+  // Evita etiquetar como INFLOW una subida de precio acompañada por distribución clara.
+  let score=0;
+  score += p5>0?1:-1;
+  score += p20>0?1:-1;
+  if(imbalance>0.20) score+=2;
+  else if(imbalance>0.10) score+=1;
+  else if(imbalance<-0.20) score-=2;
+  else if(imbalance<-0.10) score-=1;
+  if(rvol>=1.5) score += p5>=0?1:-1;
+  score=Math.max(-5,Math.min(5,score));
+
+  let signal;
+  if(imbalance<=-0.20 && p5>0) signal="ABNORMAL_ACTIVITY";
+  else if(imbalance>=0.20 && p5<0) signal="ABNORMAL_ACTIVITY";
+  else signal=score>=3?"STRONG_INFLOW":score>=1?"INFLOW":score<=-3?"STRONG_OUTFLOW":score<=-1?"OUTFLOW":"ABNORMAL_ACTIVITY";
   return {signal,score,rvol,dollarRel,priceChange5D:p5,priceChange20D:p20,volumeImbalance:imbalance,source,asOf:last.datetime||"",note:"Proxy precio + volumen; no identifica por sí solo al comprador institucional."};
 }
 async function marketFlowData(symbol,env,history=null){
