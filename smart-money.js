@@ -61,17 +61,17 @@ async function smLoad(){
     const fallback=await smFetchJson(SM_API.replace("/smart-money","/prefilter")+"?_="+Date.now(),20000);
     dj=fallback.json;
     if(!fallback.ok||dj.status!=="ok")throw new Error(dj.message||"No se pudieron detectar movimientos del mercado.");
-    const rawCandidates=dj.symbols||dj["símbolos"]||dj.symbols||[];
-    // Radar deliberadamente corto: prioriza calidad y finalización sobre 32 candidatos\n    // que disparan decenas de subrequests y hacen que Smart Money no termine.\n    const symbolsToScan=[...new Set(rawCandidates.map(x=>String(x).toUpperCase().replace(/[^A-Z0-9.\-]/g,"")).filter(Boolean))].slice(0,8);
-    if(!symbolsToScan.length)throw new Error("El mercado no devolvió candidatos.");
+    const scanCandidates=dj.symbols||dj["símbolos"]||[];
+    const scanList=[...new Set(scanCandidates.map(x=>String(x).toUpperCase().replace(/[^A-Z0-9.\\-]/g,"")).filter(Boolean))].slice(0,8);
+    if(!scanList.length)throw new Error("El mercado no devolvió candidatos.");
     let all=[];
-    for(let i=0;i<symbolsToScan.length;i+=8){
-      const chunk=symbolsToScan.slice(i,i+8);
+    for(let i=0;i<scanList.length;i+=8){
+      const chunk=scanList.slice(i,i+8);
       const result=await smFetchJson(SM_API+"?symbols="+encodeURIComponent(chunk.join(","))+"&detail=0&_="+Date.now(),20000);
       const j=result.json;
       if(result.ok&&Array.isArray(j.data))all.push(...j.data);
-      const pct=Math.min(100,Math.round((Math.min(i+8,symbolsToScan.length)/symbolsToScan.length)*100));
-      status.textContent="Smart Money en tiempo real · analizando "+Math.min(i+8,symbolsToScan.length)+"/"+symbolsToScan.length+" candidatos ("+pct+"%)";
+      const pct=Math.min(100,Math.round((Math.min(i+8,scanList.length)/scanList.length)*100));
+      status.textContent="Smart Money en tiempo real · analizando "+Math.min(i+8,scanList.length)+"/"+scanList.length+" candidatos ("+pct+"%)";
     }
     all.sort((a,b)=>(Number(b.score)||0)-(Number(a.score)||0));
     smRenderRows(all.slice(0,25));
