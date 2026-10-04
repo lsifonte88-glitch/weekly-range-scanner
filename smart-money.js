@@ -62,7 +62,7 @@ async function smLoad(){
     dj=fallback.json;
     if(!fallback.ok||dj.status!=="ok")throw new Error(dj.message||"No se pudieron detectar movimientos del mercado.");
     const rawCandidates=dj.symbols||dj["símbolos"]||dj.symbols||[];
-    const candidates=[...new Set(rawCandidates.map(x=>String(x).toUpperCase().replace(/[^A-Z0-9.\-]/g,"")).filter(Boolean))].slice(0,32);
+    // Radar deliberadamente corto: prioriza calidad y finalización sobre 32 candidatos\n    // que disparan decenas de subrequests y hacen que Smart Money no termine.\n    const candidates=[...new Set(rawCandidates.map(x=>String(x).toUpperCase().replace(/[^A-Z0-9.\-]/g,"")).filter(Boolean))].slice(0,8);
     if(!candidates.length)throw new Error("El mercado no devolvió candidatos.");
     let all=[];
     for(let i=0;i<candidates.length;i+=8){
@@ -75,7 +75,7 @@ async function smLoad(){
     }
     all.sort((a,b)=>(Number(b.score)||0)-(Number(a.score)||0));
     smRenderRows(all.slice(0,25));
-    status.textContent="Radar terminado · "+all.length+" movimientos relevantes detectados · mostrando Top 25";
+    status.textContent="Radar terminado · "+all.length+" candidatos analizados · anticipación ordenada por Opportunity Score";
   }catch(e){console.error("SMART MONEY ERROR:",e);status.textContent="ERROR: "+e.message;rows.innerHTML=`<tr><td colspan="16" class="red">${smEscape(e.message)}</td></tr>`}
 }
 
