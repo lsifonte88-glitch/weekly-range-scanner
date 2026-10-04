@@ -96,12 +96,41 @@ async function yahooScreener(scrIds,count=250) {
   return [];
 }
 async function yahooMovers() {
+  // Prefiltro orientado a ANTICIPACIÓN: no usa solo ganadores/perdedores.
+  // Mezcla actividad, crecimiento y small caps para encontrar acumulación antes
+  // de una ruptura. Los ganadores/perdedores siguen presentes como contexto.
   const sets=await Promise.all([
-    yahooScreener("day_gainers",250),
-    yahooScreener("day_losers",250),
-    yahooScreener("most_actives",250)
+    yahooScreener("most_actives",250),
+    yahooScreener("growth_technology_stocks",250),
+    yahooScreener("aggressive_small_caps",250),
+    yahooScreener("day_gainers",150),
+    yahooScreener("day_losers",100)
   ]);
-  return [...new Set(sets.flat().map(x=>String(x.symbol||"").toUpperCase()).filter(x=>x && x!=="MSFT" && /^[A-Z0-9.-]+$/.test(x)))];
+  const all=sets.flat();
+  const bySymbol=new Map();
+  for(const x of all){
+    const symbol=String(x.symbol||"").toUpperCase();
+    if(!symbol || symbol==="MSFT" || !/^[A-Z0-9.-]+$/.test(symbol)) continue;
+    const ch=Number(x.regularMarketChangePercent||x.percentchange||0);
+    const vol=Number(x.regularMarketVolume||x.volume||0);
+    const avg=Number(x.averageDailyVolume3Month||x.averageDailyVolume10Day||0);
+    const rvol=avg>0?vol/avg:0;
+    // Preferimos movimiento todavía contenido + aceleración de volumen.
+    // Penalizamos extremos para no llenar el radar con acciones que ya explotaron.
+    let early=50;
+    if(rvol>=1.15&&rvol<2.5) early+=20;
+    else if(rvol>=2.5&&rvol<4) early+=8;
+    else if(rvol>=4) early-=15;
+    if(ch>=0&&ch<=3) early+=18;
+    else if(ch>3&&ch<=6) early+=5;
+    else if(ch>10) early-=25;
+    else if(ch<-5) early-=10;
+    if(Math.abs(ch)<=2&&rvol>=1.15) early+=8;
+    if(!bySymbol.has(symbol) || early>bySymbol.get(symbol).early) bySymbol.set(symbol,{symbol,early});
+  }
+  return [...bySymbol.values()]
+    .sort((a,b)=>b.early-a.early)
+    .map(x=>x.symbol);
 }
 async function yahooTimeSeries(symbols) {
   const out = {};
@@ -216,7 +245,7 @@ export default {
       if (url.pathname === "/prefilter") {
         const symbols = await yahooMovers();
         if (symbols.length) {
-          return json({status:"ok",count:symbols.length,symbols:symbols.slice(0,32),generatedAt:new Date().toISOString(),source:"Yahoo Finance screener",note:"Prefiltro dinámico: ganadores, perdedores y mayor actividad."},200,{"cache-control":"public, max-age=60"});
+          return json({status:"ok",count:symbols.length,symbols:symbols.slice(0,32),generatedAt:new Date().toISOString(),source:"Yahoo Finance screener",note:"Prefiltro dinámico orientado a anticipación: actividad + crecimiento + small caps; prioriza RVOL y movimiento contenido."},200,{"cache-control":"public, max-age=60"});
         }
         return json({status:"error",message:"No se pudieron detectar movimientos del mercado en Yahoo Finance."},502);
       }
@@ -227,7 +256,7 @@ export default {
       if (url.pathname === "/smart-money-candidates") {
         const out=await smartMoneyCandidates(env);
         if(!out.symbols.length)return json({status:"error",message:"No se detectaron movimientos de mercado."},502);
-        return json({status:"ok",...out,generatedAt:new Date().toISOString(),source:"Twelve Data market movers",note:"Candidatos dinámicos: ganadores, perdedores y mayor actividad; no usa una lista fija ni recorre el universo completo."},200,{"cache-control":"no-store"});
+        return json({status:"ok",...out,generatedAt:new Date().toISOString(),source:"Yahoo Finance screeners",note:"Prefiltro orientado a anticipación: actividad + crecimiento + small caps, priorizando volumen acelerando con movimiento de precio todavía contenido."},200,{"cache-control":"no-store"});
       }
       if (url.pathname === "/smart-money") {
         const symbols = cleanSymbols(url.searchParams.get("symbols") || url.searchParams.get("symbol"));
@@ -939,7 +968,13 @@ async function smartMoneyFastData(symbol,env,secDirectory={},institutionalSnap=[
   const marketFlow=marketFlowFromValues(values,source);
   const unusual=values.length?unusualFromValues(values.slice(-25),source):{signal:"UNAVAILABLE",score:0,rvol:0,source,note:"No hay histórico disponible"};
   const earlySmartMoney=values.length?earlySmartMoneyFromValues(values,source):{signal:"UNAVAILABLE",score:0,source,note:"No hay histórico disponible"};
-  const capitalFlow=await unusualWhalesCapitalFlow(symbol,env);
+  // Capital Flow de pago (Unusual Whales) eliminado. El radar debe funcionar
+  // completamente con fuentes gratuitas/publicas.
+  const capitalFlow={
+    enabled:false,score:0,signal:"FREE_MODEL",
+    source:"Free price/volume model",
+    note:"Sin Unusual Whales: la presión de capital se infiere con precio, volumen, RVOL, VWAP y estructura."
+  };
 
   const insider={signal:"DEFERRED",count:0,netValue:0,events:[],note:"Form 4 se confirma solo en el Top 3."};
   const options={enabled:false,signal:"DEFERRED",expiration:"",contracts:0,callVolume:0,putVolume:0,callOpenInterest:0,putOpenInterest:0,callPutRatio:null,callPutOIRatio:null,source:"Deferred",note:"Opciones se confirman solo en el Top 3."};
@@ -957,21 +992,16 @@ async function smartMoneyFastData(symbol,env,secDirectory={},institutionalSnap=[
   // Opportunity = probabilidad/estructura de movimiento temprano basada en precio+volumen.
   // smartMoneyScore = evidencia institucional disponible. Son métricas distintas.
   const earlyScore=Number(earlySmartMoney.score||0);
-  const capitalScore=Number(capitalFlow.score||0);
-  const opportunityScore=capitalFlow.enabled && capitalFlow.signal!=="ERROR"
-    ? Math.round(earlyScore*0.60 + capitalScore*0.40)
-    : earlyScore;
+  // Opportunity Score = modelo gratuito de anticipación. No se mezcla con
+  // proveedores de pago ni con evidencia institucional rezagada.
+  const opportunityScore=earlyScore;
   const flowDirection=marketFlow.signal==="STRONG_INFLOW"||marketFlow.signal==="INFLOW"
     ?"INFLOW":marketFlow.signal==="STRONG_OUTFLOW"||marketFlow.signal==="OUTFLOW"
     ?"OUTFLOW":"MIXED";
   const reasons=[...(earlySmartMoney.reasons||[])];
   if(marketFlow.signal&&marketFlow.signal!=="UNAVAILABLE") reasons.push("Market Flow: "+marketFlow.signal);
   if(institutional.filers) reasons.push("13F: "+institutional.filers+" managers · "+institutional.signal);
-  if(capitalFlow.enabled && capitalFlow.signal!=="ERROR"){
-    reasons.push("Capital Flow: "+capitalFlow.signal+" · score "+capitalFlow.score);
-    if(capitalFlow.callPremium>0) reasons.push("Options premium $"+(Number(capitalFlow.optionsPremium||0)>=1e6?(Number(capitalFlow.optionsPremium||0)/1e6).toFixed(2)+"M":(Number(capitalFlow.optionsPremium||0)/1e3).toFixed(0)+"K"));
-    if(capitalFlow.darkPoolPremium>0) reasons.push("Dark pool $"+(Number(capitalFlow.darkPoolPremium||0)>=1e6?(Number(capitalFlow.darkPoolPremium||0)/1e6).toFixed(2)+"M":(Number(capitalFlow.darkPoolPremium||0)/1e3).toFixed(0)+"K"));
-  }
+  reasons.push("Capital Pressure: "+capitalFlow.signal+" · score "+earlyScore+" · modelo gratuito");
   if(!reasons.length) reasons.push("Sin datos suficientes en este ciclo");
 
   return {
