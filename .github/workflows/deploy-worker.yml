@@ -1,4 +1,5 @@
 name: Deploy Weekly Range API
+# Smart Money cache/deploy fix
 
 on:
   push:
