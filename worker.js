@@ -232,12 +232,12 @@ export default {
     try {
       const url = new URL(request.url);
       if (url.pathname === "/") {
-        const r = await fetch("https://raw.githubusercontent.com/lsifonte88-glitch/weekly-range-scanner/main/index.html?v=6e373edd13e169de8fd164045cca09f0d531a999", { cf: { cacheTtl: 0 } });
+        const r = await fetch("https://raw.githubusercontent.com/lsifonte88-glitch/weekly-range-scanner/main/index.html?v=1390b13dd6bddbdf006832b4e76640d3ef1b26d5", { cf: { cacheTtl: 0 } });
         if (!r.ok) return new Response("No se pudo cargar la aplicación.", { status: 502 });
         return new Response(await r.text(), { headers: { "content-type": "text/html; charset=UTF-8", "cache-control": "no-store" } });
       }
       if (url.pathname === "/smart-money.js") {
-        const r = await fetch("https://raw.githubusercontent.com/lsifonte88-glitch/weekly-range-scanner/main/smart-money.js?v=956c4c44d3f6c9e27fe663cde8e23d400cf6d224", { cf: { cacheTtl: 0 } });
+        const r = await fetch("https://raw.githubusercontent.com/lsifonte88-glitch/weekly-range-scanner/main/smart-money.js?v=b3c609d86b84037743deb164a756ba3e2aa2d820", { cf: { cacheTtl: 0 } });
         if (!r.ok) return new Response("No se pudo cargar Smart Money.", { status: 502 });
         return new Response(await r.text(), { headers: { "content-type": "application/javascript; charset=UTF-8", "cache-control": "no-store" } });
       }
