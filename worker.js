@@ -697,6 +697,96 @@ async function etfData(symbol,env,detail=false){
   }catch(e){return {signal:"NEUTRAL",holdings:[],note:e.message};}
 }
 
+
+async function unusualWhalesCapitalFlow(symbol, env) {
+  const key = env.UNUSUAL_WHALES_API_KEY;
+  if (!key) {
+    return {
+      enabled:false, score:0, signal:"UNAVAILABLE",
+      optionsPremium:0, callPremium:0, putPremium:0,
+      darkPoolPremium:0, darkPoolTrades:0,
+      note:"UNUSUAL_WHALES_API_KEY no configurada."
+    };
+  }
+
+  const base = "https://api.unusualwhales.com";
+  async function uwGet(path) {
+    const r = await fetchWithTimeout(base + path, {
+      method:"GET",
+      headers:{
+        accept:"application/json",
+        authorization:"Bearer " + key
+      }
+    }, 4500);
+    if (!r.ok) return null;
+    return await r.json();
+  }
+
+  try {
+    const [flowResp, darkResp] = await Promise.all([
+      uwGet("/api/stock/" + encodeURIComponent(symbol) + "/flow-recent"),
+      uwGet("/api/darkpool/" + encodeURIComponent(symbol))
+    ]);
+
+    const flow = Array.isArray(flowResp?.data) ? flowResp.data : [];
+    const dark = Array.isArray(darkResp?.data) ? darkResp.data : [];
+
+    let callPremium=0, putPremium=0, callAsk=0, putBid=0, callBid=0, putAsk=0;
+    for (const x of flow) {
+      callPremium += Number(x.call_premium || 0);
+      putPremium += Number(x.put_premium || 0);
+      callAsk += Number(x.call_volume_ask_side || 0);
+      putBid += Number(x.put_volume_bid_side || 0);
+      callBid += Number(x.call_volume_bid_side || 0);
+      putAsk += Number(x.put_volume_ask_side || 0);
+    }
+
+    let darkPoolPremium=0, darkPoolTrades=0, darkAboveAsk=0;
+    for (const x of dark.slice(0,200)) {
+      const premium=Number(x.premium || 0);
+      const price=Number(x.price || 0);
+      const ask=Number(x.nbbo_ask || 0);
+      darkPoolPremium += premium;
+      darkPoolTrades++;
+      if (ask>0 && price>=ask) darkAboveAsk++;
+    }
+
+    const optionPremium = callPremium + putPremium;
+    const callShare = optionPremium>0 ? callPremium/optionPremium : 0.5;
+    const askBidPressure = (callAsk + putBid + callBid + putAsk)>0
+      ? (callAsk + putBid)/(callAsk + putBid + callBid + putAsk)
+      : 0.5;
+
+    let score=50;
+    score += (callShare-0.5)*45;
+    score += (askBidPressure-0.5)*35;
+    if (darkPoolPremium>0 && darkPoolTrades>0) {
+      const darkPressure=darkAboveAsk/darkPoolTrades;
+      score += (darkPressure-0.5)*20;
+    }
+    score=Math.max(0,Math.min(100,Math.round(score)));
+
+    const signal=score>=70?"CAPITAL_INFLOW":score<=30?"CAPITAL_OUTFLOW":"CAPITAL_MIXED";
+    return {
+      enabled:true, score, signal,
+      optionsPremium:optionPremium,
+      callPremium, putPremium,
+      callAsk, putBid, callBid, putAsk,
+      darkPoolPremium, darkPoolTrades, darkAboveAsk,
+      source:"Unusual Whales",
+      note:"Options flow + dark-pool activity. Es flujo de mercado, no prueba por sí solo identidad institucional."
+    };
+  } catch (e) {
+    return {
+      enabled:true, score:0, signal:"ERROR",
+      optionsPremium:0, callPremium:0, putPremium:0,
+      darkPoolPremium:0, darkPoolTrades:0,
+      source:"Unusual Whales",
+      note:"Proveedor no disponible en este ciclo: " + (e?.message || String(e))
+    };
+  }
+}
+
 function marketFlowFromValues(v,source){
   if(!Array.isArray(v)||v.length<22)return {signal:"UNAVAILABLE",score:0,note:"Insufficient history",source};
   const last=v.at(-1), prev=v.slice(0,-1), av=avg(prev.slice(-20).map(x=>x.volume)), rvol=av?last.volume/av:0;
@@ -849,6 +939,7 @@ async function smartMoneyFastData(symbol,env,secDirectory={},institutionalSnap=[
   const marketFlow=marketFlowFromValues(values,source);
   const unusual=values.length?unusualFromValues(values.slice(-25),source):{signal:"UNAVAILABLE",score:0,rvol:0,source,note:"No hay histórico disponible"};
   const earlySmartMoney=values.length?earlySmartMoneyFromValues(values,source):{signal:"UNAVAILABLE",score:0,source,note:"No hay histórico disponible"};
+  const capitalFlow=await unusualWhalesCapitalFlow(symbol,env);
 
   const insider={signal:"DEFERRED",count:0,netValue:0,events:[],note:"Form 4 se confirma solo en el Top 3."};
   const options={enabled:false,signal:"DEFERRED",expiration:"",contracts:0,callVolume:0,putVolume:0,callOpenInterest:0,putOpenInterest:0,callPutRatio:null,callPutOIRatio:null,source:"Deferred",note:"Opciones se confirman solo en el Top 3."};
@@ -865,13 +956,22 @@ async function smartMoneyFastData(symbol,env,secDirectory={},institutionalSnap=[
 
   // Opportunity = probabilidad/estructura de movimiento temprano basada en precio+volumen.
   // smartMoneyScore = evidencia institucional disponible. Son métricas distintas.
-  const opportunityScore=Number(earlySmartMoney.score||0);
+  const earlyScore=Number(earlySmartMoney.score||0);
+  const capitalScore=Number(capitalFlow.score||0);
+  const opportunityScore=capitalFlow.enabled && capitalFlow.signal!=="ERROR"
+    ? Math.round(earlyScore*0.60 + capitalScore*0.40)
+    : earlyScore;
   const flowDirection=marketFlow.signal==="STRONG_INFLOW"||marketFlow.signal==="INFLOW"
     ?"INFLOW":marketFlow.signal==="STRONG_OUTFLOW"||marketFlow.signal==="OUTFLOW"
     ?"OUTFLOW":"MIXED";
   const reasons=[...(earlySmartMoney.reasons||[])];
   if(marketFlow.signal&&marketFlow.signal!=="UNAVAILABLE") reasons.push("Market Flow: "+marketFlow.signal);
   if(institutional.filers) reasons.push("13F: "+institutional.filers+" managers · "+institutional.signal);
+  if(capitalFlow.enabled && capitalFlow.signal!=="ERROR"){
+    reasons.push("Capital Flow: "+capitalFlow.signal+" · score "+capitalFlow.score);
+    if(capitalFlow.callPremium>0) reasons.push("Options premium "+smMoney(capitalFlow.optionsPremium||0));
+    if(capitalFlow.darkPoolPremium>0) reasons.push("Dark pool "+smMoney(capitalFlow.darkPoolPremium||0));
+  }
   if(!reasons.length) reasons.push("Sin datos suficientes en este ciclo");
 
   return {
@@ -891,6 +991,7 @@ async function smartMoneyFastData(symbol,env,secDirectory={},institutionalSnap=[
     etf:{signal:"DEFERRED",holdings:[],note:"Composición ETF no participa en el score."},
     technical:{signal:flowDirection==="INFLOW"?"BULLISH_FLOW":flowDirection==="OUTFLOW"?"BEARISH_FLOW":"MIXED"},
     earlySmartMoney,
+    capitalFlow,
     freshness:{market:source==="Unavailable"?"UNAVAILABLE":"DAILY",insider:"DEFERRED",institutional:institutional.filers?"LAGGED":"UNAVAILABLE",congress:"DEFERRED",options:"DEFERRED"},
     dataQuality:[institutional.filers?institutional.filers+" 13F":"sin 13F","market flow "+(source!=="Unavailable"?source:"unavailable"),"Form 4 diferido","opciones diferidas","Congreso diferido"].join(" · "),
     mode:"FAST_EARLY_FLOW",
