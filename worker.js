@@ -969,8 +969,8 @@ async function smartMoneyFastData(symbol,env,secDirectory={},institutionalSnap=[
   if(institutional.filers) reasons.push("13F: "+institutional.filers+" managers · "+institutional.signal);
   if(capitalFlow.enabled && capitalFlow.signal!=="ERROR"){
     reasons.push("Capital Flow: "+capitalFlow.signal+" · score "+capitalFlow.score);
-    if(capitalFlow.callPremium>0) reasons.push("Options premium "+smMoney(capitalFlow.optionsPremium||0));
-    if(capitalFlow.darkPoolPremium>0) reasons.push("Dark pool "+smMoney(capitalFlow.darkPoolPremium||0));
+    if(capitalFlow.callPremium>0) reasons.push("Options premium $"+(Number(capitalFlow.optionsPremium||0)>=1e6?(Number(capitalFlow.optionsPremium||0)/1e6).toFixed(2)+"M":(Number(capitalFlow.optionsPremium||0)/1e3).toFixed(0)+"K"));
+    if(capitalFlow.darkPoolPremium>0) reasons.push("Dark pool $"+(Number(capitalFlow.darkPoolPremium||0)>=1e6?(Number(capitalFlow.darkPoolPremium||0)/1e6).toFixed(2)+"M":(Number(capitalFlow.darkPoolPremium||0)/1e3).toFixed(0)+"K"));
   }
   if(!reasons.length) reasons.push("Sin datos suficientes en este ciclo");
 
