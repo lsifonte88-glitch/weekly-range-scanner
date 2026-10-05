@@ -992,22 +992,37 @@ async function smartMoneyFastData(symbol,env,secDirectory={},institutionalSnap=[
   // Opportunity = probabilidad/estructura de movimiento temprano basada en precio+volumen.
   // smartMoneyScore = evidencia institucional disponible. Son métricas distintas.
   const earlyScore=Number(earlySmartMoney.score||0);
-  // Opportunity Score = modelo gratuito de anticipación. No se mezcla con
-  // proveedores de pago ni con evidencia institucional rezagada.
-  const opportunityScore=earlyScore;
+  // Opportunity es una señal LONG de swing, no un score de actividad genérica.
+  // Si el Market Flow contradice la dirección, la oportunidad debe bajar aunque
+  // el modelo temprano detecte actividad. Esto evita casos como TOST:
+  // Opportunity alto + STRONG_OUTFLOW.
+  let opportunityScore=earlyScore;
+  if(marketFlow.signal==="STRONG_OUTFLOW"){
+    opportunityScore=Math.min(opportunityScore,35);
+  } else if(marketFlow.signal==="OUTFLOW"){
+    opportunityScore=Math.min(opportunityScore,50);
+  } else if(marketFlow.signal==="STRONG_INFLOW"){
+    opportunityScore=Math.min(100,opportunityScore+5);
+  } else if(marketFlow.signal==="INFLOW"){
+    opportunityScore=Math.min(100,opportunityScore+2);
+  }
+  opportunityScore=Math.max(0,Math.min(100,Math.round(opportunityScore)));
   const flowDirection=marketFlow.signal==="STRONG_INFLOW"||marketFlow.signal==="INFLOW"
     ?"INFLOW":marketFlow.signal==="STRONG_OUTFLOW"||marketFlow.signal==="OUTFLOW"
     ?"OUTFLOW":"MIXED";
   const reasons=[...(earlySmartMoney.reasons||[])];
   if(marketFlow.signal&&marketFlow.signal!=="UNAVAILABLE") reasons.push("Market Flow: "+marketFlow.signal);
+  if(marketFlow.signal==="STRONG_OUTFLOW") reasons.push("OPPORTUNITY PENALIZADA: flujo contrario");
+  else if(marketFlow.signal==="OUTFLOW") reasons.push("Opportunity limitada por flujo vendedor");
   if(institutional.filers) reasons.push("13F: "+institutional.filers+" managers · "+institutional.signal);
-  reasons.push("Capital Pressure: "+capitalFlow.signal+" · score "+earlyScore+" · modelo gratuito");
+  reasons.push("Early raw "+earlyScore+" → Opportunity "+opportunityScore+" · modelo gratuito");
   if(!reasons.length) reasons.push("Sin datos suficientes en este ciclo");
 
   return {
     symbol,
     score:opportunityScore,
     opportunityScore,
+    earlyRawScore:earlyScore,
     smartMoneyScore:institutionalScore,
     flowDirection,
     institutional,
