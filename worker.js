@@ -288,22 +288,7 @@ export default {
           });
         }
         data.sort((a,b)=>(Number(b.score)||0)-(Number(a.score)||0));
-        // Confirmación real solo para los 3 mejores candidatos.
-        // Con 30 símbolos + 5 screeners, este límite mantiene el Worker bajo el máximo
-        // de subrequests y permite consultar fuentes reales sin bloquear el radar.
-        const top3=data.slice(0,3);
-        await Promise.all(top3.map(async x=>{
-          const cik=secDirectory?.[x.symbol]?.cik;
-          try{
-            if(cik) x.insider=await insiderFastData(x.symbol,cik,env);
-            x.options=await yahooOptionsFlow(x.symbol,env) || {enabled:false,signal:"UNAVAILABLE",source:"Unavailable",note:"Yahoo options unavailable"};
-            if(env.QUIVER_API_KEY) x.congress=await congressData(x.symbol,env,false);
-            else x.congress={signal:"DEFERRED",count:0,buys:0,sells:0,events:[],note:"QUIVER_API_KEY no configurada."};
-          }catch(_){}
-          x.confirmation=confirmationFromSources(x.insider||{},x.institutional||{},x.congress||{},x.options||{});
-          x.dataQuality=[x.dataQuality||"",x.insider?.signal==="UNAVAILABLE"?"SEC error":x.insider?.count?"SEC Form 4":"sin Form 4",x.options?.enabled?"opciones OK":"sin opciones",x.congress?.signal && x.congress.signal!=="DEFERRED"?"Congreso "+x.congress.signal:"Congreso diferido"].filter(Boolean).join(" · ");
-        }));
-        for(const x of data){
+        // FAST no hace confirmaciones adicionales aquí.\n        // Mantenerlas diferidas evita consumir subrequests y permite que el radar\n        // analice todos los candidatos sin bloquearse por el límite del Worker.\n        for(const x of data){
           if(!x.confirmation)x.confirmation=confirmationFromSources(x.insider,x.institutional,x.congress,x.options);
         }
         return json({
