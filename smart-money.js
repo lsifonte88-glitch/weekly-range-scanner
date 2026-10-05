@@ -62,7 +62,10 @@ async function smLoad(){
     dj=fallback.json;
     if(!fallback.ok||dj.status!=="ok")throw new Error(dj.message||"No se pudieron detectar movimientos del mercado.");
     const scanCandidates=dj.symbols||dj["símbolos"]||[];
-    const scanList=[...new Set(scanCandidates.map(x=>String(x).toUpperCase().replace(/[^A-Z0-9.\\-]/g,"")).filter(Boolean))].slice(0,8);
+    // Ampliamos el embudo: el prefilter descubre muchos candidatos y Smart Money
+    // confirma un grupo mayor. 8 era demasiado estrecho para encontrar oportunidades
+    // como ERO antes de que aparecieran entre los primeros ganadores.
+    const scanList=[...new Set(scanCandidates.map(x=>String(x).toUpperCase().replace(/[^A-Z0-9.\\-]/g,"")).filter(Boolean))].slice(0,16);
     if(!scanList.length)throw new Error("El mercado no devolvió candidatos.");
     let all=[];
     for(let i=0;i<scanList.length;i+=8){
@@ -75,7 +78,7 @@ async function smLoad(){
     }
     all.sort((a,b)=>(Number(b.score)||0)-(Number(a.score)||0));
     smRenderRows(all.slice(0,25));
-    status.textContent="Radar terminado · "+all.length+" candidatos analizados · anticipación ordenada por Opportunity Score";
+    status.textContent="Radar terminado · "+all.length+" candidatos analizados · ranking por Opportunity Score direccional";
   }catch(e){console.error("SMART MONEY ERROR:",e);status.textContent="ERROR: "+e.message;rows.innerHTML=`<tr><td colspan="16" class="red">${smEscape(e.message)}</td></tr>`}
 }
 
