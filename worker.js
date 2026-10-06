@@ -1076,3 +1076,4 @@ async function smartMoneyData(symbol,env,detail=false,institutionalSnap=[],issue
   if(!reasons.length) reasons.push("sin confluencia direccional suficiente");
   return {symbol,score,smartMoneyScore:score,flowDirection,marketFlow,earlySmartMoney,confluence,confirmation,reasons,insider,institutional,congress,unusual,options,etf,technical,freshness,dataQuality,asOf:new Date().toISOString(),events:detail?[...(insider.events||[]),...(institutional.events||[]),...(congress.events||[])]:[]};
 }
+// Deploy trigger: Smart Money FAST confirmation calls remain deferred to protect Worker subrequest budget.
