@@ -272,7 +272,8 @@ export default {
         try { institutionalSnap = await institutionalSnapshot(env); } catch (_) {}
         // FAST: primero calculamos evidencia institucional. Después confirmamos
         // solo el Top 5 para mantener el radar dentro del límite de subrequests del plan Free.
-        const fastSymbols=symbols.slice(0,8);\n        const results=await Promise.allSettled(fastSymbols.map(s=>smartMoneyFastData(s,env,secDirectory,institutionalSnap)));
+        const fastSymbols=symbols.slice(0,8);
+        const results=await Promise.allSettled(fastSymbols.map(s=>smartMoneyFastData(s,env,secDirectory,institutionalSnap)));
         for(let i=0;i<results.length;i++){
           const r=results[i];
           if(r.status==="fulfilled") data.push(r.value);
@@ -288,7 +289,10 @@ export default {
           });
         }
         data.sort((a,b)=>(Number(b.score)||0)-(Number(a.score)||0));
-        // FAST no hace confirmaciones adicionales aquí.\n        // Mantenerlas diferidas evita consumir subrequests y permite que el radar\n        // analice todos los candidatos sin bloquearse por el límite del Worker.\n        for(const x of data){
+        // FAST no hace confirmaciones adicionales aquí.
+        // Mantenerlas diferidas evita consumir subrequests y permite que el radar
+        // analice todos los candidatos sin bloquearse por el límite del Worker.
+        for(const x of data){
           if(!x.confirmation)x.confirmation=confirmationFromSources(x.insider,x.institutional,x.congress,x.options);
         }
         return json({
