@@ -272,12 +272,12 @@ export default {
         try { institutionalSnap = await institutionalSnapshot(env); } catch (_) {}
         // FAST: primero calculamos evidencia institucional. Después confirmamos
         // solo el Top 5 para mantener el radar dentro del límite de subrequests del plan Free.
-        const results=await Promise.allSettled(symbols.map(s=>smartMoneyFastData(s,env,secDirectory,institutionalSnap)));
+        const fastSymbols=symbols.slice(0,8);\n        const results=await Promise.allSettled(fastSymbols.map(s=>smartMoneyFastData(s,env,secDirectory,institutionalSnap)));
         for(let i=0;i<results.length;i++){
           const r=results[i];
           if(r.status==="fulfilled") data.push(r.value);
           else data.push({
-            symbol:symbols[i],score:50,flowDirection:"MIXED",
+            symbol:fastSymbols[i],score:50,flowDirection:"MIXED",
             marketFlow:{signal:"UNAVAILABLE",score:0,rvol:0,priceChange5D:0,dollarRel:0,note:"Proveedor no disponible en este ciclo"},
             confluence:{confidence:"LOW"},reasons:["sin datos suficientes en este ciclo"],
             insider:{signal:"DEFERRED",count:0,netValue:0,note:"Confirmación diferida al Top 5"},
@@ -296,7 +296,7 @@ export default {
           sources:{
             sec:true,marketHistoryFallbacks:["Stooq","Yahoo Finance","Twelve Data"],
             options:"Yahoo Finance/Twelve Data on detail",institutional13F:"detail only",
-            congress:Boolean(env.QUIVER_API_KEY),"confirmationTopN":3
+            congress:Boolean(env.QUIVER_API_KEY),"confirmationTopN":0
           }
         });
       }
