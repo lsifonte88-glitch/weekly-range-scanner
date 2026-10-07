@@ -905,90 +905,171 @@ function atrFromValues(v, period=14) {
 }
 
 function earlySmartMoneyFromValues(v, source) {
-  if (!Array.isArray(v) || v.length < 25) return {signal:"UNAVAILABLE",score:0,source,note:"Insufficient history"};
+  if (!Array.isArray(v) || v.length < 50) return {signal:"UNAVAILABLE",score:0,source,note:"Insufficient history"};
+
   const last=v.at(-1), prev=v.slice(0,-1);
   const avgVol20=avg(prev.slice(-20).map(x=>x.volume));
   const rvol=avgVol20?last.volume/avgVol20:0;
   const avgDollar20=avg(prev.slice(-20).map(x=>x.close*x.volume));
   const dollarRel=avgDollar20?(last.close*last.volume)/avgDollar20:0;
-  const p3=pct(last.close,v.at(-4)?.close),p5=pct(last.close,v.at(-6)?.close),p10=pct(last.close,v.at(-11)?.close),p20=pct(last.close,v.at(-21)?.close);
+  const p3=pct(last.close,v.at(-4)?.close);
+  const p5=pct(last.close,v.at(-6)?.close);
+  const p10=pct(last.close,v.at(-11)?.close);
+  const p20=pct(last.close,v.at(-21)?.close);
+
   const atr=atrFromValues(v,14).atr;
-  if(!Number.isFinite(atr) || atr<3){ return {signal:"DISCARDED_ATR",score:0,opportunityScore:0,atr,rvol,dollarRel,source,reasons:["ATR(14) < $3"],note:"Descartada: rango medio real inferior a $3 por sesión."}; }
-  const last20=v.slice(-20);
-  const totalPV=last20.reduce((s,x)=>s+(((x.high+x.low+x.close)/3)*x.volume),0);
-  const totalVol=last20.reduce((s,x)=>s+x.volume,0);
+  if(!Number.isFinite(atr) || atr<3){
+    return {
+      signal:"DISCARDED_ATR",score:0,opportunityScore:0,atr,rvol,dollarRel,source,
+      reasons:["ATR(14) < $3"],
+      note:"Descartada: rango medio real inferior a $3 por sesión."
+    };
+  }
+
+  const slice20=v.slice(-20);
+  const slice10=v.slice(-10);
+  const slice5=v.slice(-5);
+
+  const totalPV=slice20.reduce((s,x)=>s+(((x.high+x.low+x.close)/3)*x.volume),0);
+  const totalVol=slice20.reduce((s,x)=>s+x.volume,0);
   const vwap=totalVol?totalPV/totalVol:last.close;
   const vwapDistance=vwap?((last.close/vwap)-1)*100:0;
-  const rangeHigh=Math.max(...last20.map(x=>Number(x.high)||0));
-  const rangeLow=Math.min(...last20.map(x=>Number(x.low)||0));
+
+  const rangeHigh=Math.max(...slice20.map(x=>Number(x.high)||0));
+  const rangeLow=Math.min(...slice20.map(x=>Number(x.low)||0));
   const rangeWidth=rangeHigh-rangeLow;
   const rangePosition=rangeWidth>0?((last.close-rangeLow)/rangeWidth)*100:50;
+
   const prior20=v.slice(-21,-1);
   const prior20High=prior20.length?Math.max(...prior20.map(x=>Number(x.high)||0)):rangeHigh;
+  const breakoutDistance=prior20High>0?((prior20High-last.close)/prior20High)*100:99;
   const breakoutExtension=prior20High>0?((last.close/prior20High)-1)*100:0;
-  const recent=v.slice(-10);
-  let upDollar=0,downDollar=0;
-  for(const x of recent){
-    const d=x.close*x.volume;
-    if(x.close>x.open) upDollar+=d;
+
+  const trueRanges=[];
+  for(let i=Math.max(1,v.length-21);i<v.length;i++){
+    const h=Number(v[i].high)||0,l=Number(v[i].low)||0,pc=Number(v[i-1].close)||0;
+    if(h>0&&l>0&&pc>0) trueRanges.push(Math.max(h-l,Math.abs(h-pc),Math.abs(l-pc)));
+  }
+  const atr20=avg(trueRanges);
+  const atr5=avg(trueRanges.slice(-5));
+  const compressionRatio=atr20>0?atr5/atr20:1;
+
+  const ema=(arr,n)=>{
+    if(!arr.length)return 0;
+    const k=2/(n+1);
+    let e=arr[0];
+    for(let i=1;i<arr.length;i++) e=arr[i]*k+e*(1-k);
+    return e;
+  };
+  const closes=v.map(x=>Number(x.close)||0).filter(x=>x>0);
+  const ema20=ema(closes.slice(-60),20);
+  const ema50=ema(closes.slice(-100),50);
+
+  let upDollar=0,downDollar=0,upDays=0;
+  for(const x of slice10){
+    const d=(Number(x.close)||0)*(Number(x.volume)||0);
+    if(x.close>x.open){upDollar+=d;upDays++;}
     else if(x.close<x.open) downDollar+=d;
   }
   const dollarImbalance=upDollar+downDollar>0?(upDollar-downDollar)/(upDollar+downDollar):0;
+  const upDayRatio=upDays/slice10.length;
+
   const rvolSeries=[];
-  for(let i=Math.max(1,v.length-6);i<v.length;i++){
-    const h=v.slice(Math.max(0,i-20),i),av=avg(h.map(x=>x.volume));
+  for(let i=Math.max(20,v.length-8);i<v.length;i++){
+    const h=v.slice(i-20,i),av=avg(h.map(x=>x.volume));
     if(av>0) rvolSeries.push(v[i].volume/av);
   }
   const previousRVOL=avg(rvolSeries.slice(0,-1));
   const rvolAcceleration=previousRVOL>0?rvol/previousRVOL:1;
 
+  const avgDollar5=avg(slice5.map(x=>(Number(x.close)||0)*(Number(x.volume)||0)));
+  const avgDollarPrior5=avg(v.slice(-10,-5).map(x=>(Number(x.close)||0)*(Number(x.volume)||0)));
+  const dollarAcceleration=avgDollarPrior5>0?avgDollar5/avgDollarPrior5:1;
+
   let score=0;
   const reasons=[];
 
-  if(dollarRel>=1.15&&dollarRel<=2.5){score+=18;reasons.push("$ volumen creciendo");}
-  else if(dollarRel>2.5&&dollarRel<=4){score+=8;reasons.push("$ volumen ya acelerado");}
-  else if(dollarRel>4){score-=8;reasons.push("$ volumen demasiado acelerado");}
+  // 1) Actividad nueva: importa más la aceleración que un RVOL aislado.
+  if(rvol>=1.10&&rvol<1.50){score+=8;reasons.push("RVOL entrando");}
+  else if(rvol>=1.50&&rvol<2.50){score+=12;reasons.push("RVOL activo");}
+  else if(rvol>=2.50&&rvol<3.50){score+=7;reasons.push("RVOL fuerte");}
+  else if(rvol>=3.50){score-=8;reasons.push("RVOL extremo");}
 
-  if(rvol>=1.15&&rvol<2){score+=12;reasons.push("RVOL temprano");}
-  else if(rvol>=2&&rvol<=3){score+=7;reasons.push("RVOL confirmado");}
-  else if(rvol>3){score-=6;reasons.push("RVOL tardío/extremo");}
+  if(rvolAcceleration>=1.10&&rvolAcceleration<1.30){score+=8;reasons.push("RVOL acelerando");}
+  else if(rvolAcceleration>=1.30&&rvolAcceleration<1.70){score+=13;reasons.push("RVOL aceleración fuerte");}
+  else if(rvolAcceleration>=1.70){score+=7;reasons.push("aceleración muy fuerte");}
 
-  if(rvolAcceleration>=1.10&&rvolAcceleration<=1.60){score+=15;reasons.push("RVOL acelerando desde base");}
-  else if(rvolAcceleration>1.60){score+=5;reasons.push("RVOL aceleración fuerte");}
+  if(dollarRel>=1.10&&dollarRel<1.75){score+=7;reasons.push("$ volumen creciendo");}
+  else if(dollarRel>=1.75&&dollarRel<3){score+=10;reasons.push("$ volumen activo");}
+  else if(dollarRel>=3&&dollarRel<4){score+=5;reasons.push("$ volumen elevado");}
+  else if(dollarRel>=4){score-=8;reasons.push("$ volumen extremo");}
 
-  if(dollarImbalance>=.20){score+=18;reasons.push("acumulación compradora");}
-  else if(dollarImbalance>=.10){score+=9;reasons.push("sesgo comprador");}
-  else if(dollarImbalance<=-.20){score-=20;reasons.push("distribución");}
-  else if(dollarImbalance<=-.10){score-=10;reasons.push("sesgo vendedor");}
+  if(dollarAcceleration>=1.10&&dollarAcceleration<1.50){score+=7;reasons.push("$ volumen acelerando");}
+  else if(dollarAcceleration>=1.50){score+=10;reasons.push("$ volumen aceleración fuerte");}
 
-  if(p5>=0&&p5<=3){score+=12;reasons.push("momentum temprano");}
-  else if(p5>3&&p5<=6){score+=5;reasons.push("momentum en aceleración");}
-  else if(p5>6&&p5<=10){score-=5;reasons.push("movimiento avanzado");}
+  // 2) Acumulación: volumen comprador persistente, no solo una vela.
+  if(dollarImbalance>=0.25){score+=16;reasons.push("acumulación compradora");}
+  else if(dollarImbalance>=0.12){score+=10;reasons.push("sesgo comprador");}
+  else if(dollarImbalance>=0.05){score+=4;reasons.push("ligera presión compradora");}
+  else if(dollarImbalance<=-0.25){score-=18;reasons.push("distribución");}
+  else if(dollarImbalance<=-0.12){score-=10;reasons.push("sesgo vendedor");}
+
+  if(upDayRatio>=0.60){score+=6;reasons.push("mayoría de sesiones alcistas");}
+  else if(upDayRatio<=0.30){score-=7;reasons.push("pocas sesiones alcistas");}
+
+  // 3) Compresión + actividad = condición previa a expansión.
+  if(compressionRatio<0.75&&rvol>=1.10){score+=12;reasons.push("compresión con volumen");}
+  else if(compressionRatio<0.90&&rvol>=1.10){score+=7;reasons.push("rango contrayéndose");}
+  else if(compressionRatio>1.35&&rvol>2){score-=5;reasons.push("volatilidad ya expandida");}
+
+  // 4) Posición: cerca de ruptura, pero sin haber recorrido ya demasiado.
+  if(breakoutDistance>=0&&breakoutDistance<=2){score+=14;reasons.push("a 2% del máximo");}
+  else if(breakoutDistance>2&&breakoutDistance<=5){score+=10;reasons.push("cerca del máximo");}
+  else if(breakoutDistance>5&&breakoutDistance<=10){score+=5;reasons.push("estructura de pre-ruptura");}
+  else if(breakoutDistance>20){score-=4;reasons.push("lejos del máximo");}
+
+  if(rangePosition>=70&&rangePosition<90){score+=8;reasons.push("parte alta del rango");}
+  else if(rangePosition>=55&&rangePosition<70){score+=4;reasons.push("rango favorable");}
+  else if(rangePosition<35){score-=5;reasons.push("parte baja del rango");}
+
+  // 5) Tendencia: queremos presión alcista antes del breakout, no una acción caída.
+  if(last.close>ema20&&ema20>ema50){score+=10;reasons.push("tendencia alcista alineada");}
+  else if(last.close>ema20){score+=5;reasons.push("sobre EMA20");}
+  else if(last.close<ema20&&last.close<ema50){score-=8;reasons.push("debajo de medias");}
+
+  // 6) Momentum controlado. Evita comprar el movimiento ya hecho.
+  if(p5>=-1&&p5<=3){score+=8;reasons.push("momentum temprano");}
+  else if(p5>3&&p5<=6){score+=4;reasons.push("momentum acelerando");}
+  else if(p5>6&&p5<=10){score-=6;reasons.push("movimiento avanzado");}
   else if(p5>10){score-=18;reasons.push("movimiento demasiado extendido");}
-  else if(p5<-4){score-=12;reasons.push("momentum débil");}
+  else if(p5<-5){score-=8;reasons.push("momentum débil");}
 
-  if(p10>=0&&p10<=6){score+=8;reasons.push("avance 10D contenido");}
-  else if(p10>10){score-=8;reasons.push("avance 10D avanzado");}
+  if(p10>=-2&&p10<=8){score+=5;reasons.push("avance 10D controlado");}
+  else if(p10>15){score-=10;reasons.push("avance 10D avanzado");}
+  if(p20>25){score-=15;reasons.push("subida 20D demasiado avanzada");}
+  else if(p20>15){score-=8;reasons.push("subida 20D avanzada");}
 
-  if(p20>15){score-=15;reasons.push("subida 20D demasiado avanzada");}
-  else if(p20>10){score-=8;reasons.push("subida 20D avanzada");}
+  // 7) VWAP: cerca/sobre, pero no muy extendida.
+  if(vwapDistance>=-1&&vwapDistance<=3){score+=7;reasons.push("cerca de VWAP");}
+  else if(vwapDistance>3&&vwapDistance<=5){score+=2;reasons.push("sobre VWAP moderadamente");}
+  else if(vwapDistance>7){score-=15;reasons.push("muy extendida sobre VWAP");}
+  else if(vwapDistance>5){score-=8;reasons.push("extendida sobre VWAP");}
+  else if(vwapDistance<-4){score-=5;reasons.push("bajo VWAP");}
 
-  // Penalización estructural: evita confundir una acción que ya está en la parte
-  // alta del rango con acumulación temprana, aunque su 5D todavía parezca moderado.
-  if(rangePosition>=90 && p5>2){score-=16;reasons.push("parte alta del rango");}
-  else if(rangePosition>=82 && p5>3){score-=10;reasons.push("rango avanzado");}
+  // 8) No premiar una ruptura ya consumada.
   if(breakoutExtension>=2){score-=14;reasons.push("ruptura ya extendida");}
   else if(breakoutExtension>=0.5){score-=6;reasons.push("sobre máximo previo");}
 
-  if(vwapDistance>=-1&&vwapDistance<=2.5){score+=12;reasons.push("cerca de VWAP");}
-  else if(vwapDistance>2.5&&vwapDistance<=5){score+=3;reasons.push("sobre VWAP moderadamente");}
-  else if(vwapDistance>5&&vwapDistance<=7){score-=8;reasons.push("extendida sobre VWAP");}
-  else if(vwapDistance>7){score-=18;reasons.push("muy extendida sobre VWAP");}
-  else if(vwapDistance<-3){score-=5;reasons.push("bajo VWAP");}
-
   score=Math.max(0,Math.min(100,Math.round(score)));
   const signal=score>=75?"EARLY_ACCUMULATION":score>=60?"DEVELOPING":score<=35?"LATE_OR_WEAK":"NEUTRAL";
-  return {signal,score,rvol,dollarRel,dollarImbalance,rvolAcceleration,priceChange3D:p3,priceChange5D:p5,priceChange10D:p10,atr,vwap,vwapDistance,rangePosition,breakoutExtension,source,reasons,note:"Modelo de acumulación temprana + filtro duro ATR(14) >= $3; prioriza acciones y ETFs con capacidad real de movimiento para swings."};
+
+  return {
+    signal,score,rvol,dollarRel,dollarImbalance,rvolAcceleration,dollarAcceleration,
+    priceChange3D:p3,priceChange5D:p5,priceChange10D:p10,priceChange20D:p20,
+    atr,vwap,vwapDistance,rangePosition,breakoutDistance,breakoutExtension,
+    compressionRatio,ema20,ema50,upDayRatio,source,reasons,
+    note:"Modelo pre-breakout: aceleración de volumen + acumulación + compresión + proximidad a ruptura + tendencia, con penalización por movimiento ya extendido. ATR(14) >= $3."
+  };
 }
 async function smartMoneyFastData(symbol,env,secDirectory={},institutionalSnap=[]){
   // RADAR: el FAST debe detectar movimiento temprano usando precio/volumen.
