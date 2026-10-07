@@ -264,47 +264,46 @@ export default {
         const detail = url.searchParams.get("detail")==="1";
         const data = [];
         if (!detail) {
-        // FAST: Smart Money is evidence-first. 13F is loaded once for the whole radar;
-        // technical price/volume remains context only and cannot create the Smart Money score.
-        let secDirectory = {};
-        let institutionalSnap = [];
-        try { secDirectory = await secTickerDirectory(env); } catch (_) {}
-        try { institutionalSnap = await institutionalSnapshot(env); } catch (_) {}
-        // FAST: primero calculamos evidencia institucional. Después confirmamos
-        // solo el Top 5 para mantener el radar dentro del límite de subrequests del plan Free.
+        // FAST: radar ligero y estable. No ejecutamos SEC/13F global aquí:
+        // esas consultas multiplican subrequests y pueden tumbar Cloudflare.
+        // La confirmación institucional se reserva para /smart-money?detail=1.
         const fastSymbols=symbols.slice(0,8);
-        const results=await Promise.allSettled(fastSymbols.map(s=>smartMoneyFastData(s,env,secDirectory,institutionalSnap)));
+        const results=await Promise.allSettled(
+          fastSymbols.map(s=>smartMoneyFastData(s,env,{},[]))
+        );
         for(let i=0;i<results.length;i++){
           const r=results[i];
           if(r.status==="fulfilled") data.push(r.value);
           else data.push({
-            symbol:fastSymbols[i],score:50,flowDirection:"MIXED",
-            marketFlow:{signal:"UNAVAILABLE",score:0,rvol:0,priceChange5D:0,dollarRel:0,note:"Proveedor no disponible en este ciclo"},
-            confluence:{confidence:"LOW"},reasons:["sin datos suficientes en este ciclo"],
-            insider:{signal:"DEFERRED",count:0,netValue:0,note:"Confirmación diferida al Top 5"},
+            symbol:fastSymbols[i],score:0,opportunityScore:0,earlyRawScore:0,
+            smartMoneyScore:0,flowDirection:"MIXED",
+            marketFlow:{signal:"UNAVAILABLE",score:0,rvol:0,priceChange5D:0,note:"Proveedor no disponible en este ciclo"},
+            earlySmartMoney:{signal:"UNAVAILABLE",score:0},
+            confluence:{confidence:"LOW"},
+            reasons:["sin datos suficientes en este ciclo"],
+            insider:{signal:"DEFERRED",count:0,netValue:0},
             institutional:{signal:"DEFERRED",filers:0,note:"13F disponible en DETALLES"},
             congress:{signal:"DEFERRED",count:0,note:"Congreso disponible en DETALLES"},
-            unusual:{signal:"UNAVAILABLE",score:0,rvol:0},options:{signal:"DEFERRED",enabled:false},
-            etf:{signal:"DEFERRED"},dataQuality:"fallo aislado de proveedor",asOf:new Date().toISOString()
+            unusual:{signal:"UNAVAILABLE",score:0,rvol:0},
+            options:{signal:"DEFERRED",enabled:false},
+            etf:{signal:"DEFERRED"},
+            confirmation:{score:0,signal:"NO_CONFIRMATION",confidence:"LOW",evidence:[]},
+            dataQuality:"fallo aislado de proveedor",
+            asOf:new Date().toISOString()
           });
         }
         data.sort((a,b)=>(Number(b.score)||0)-(Number(a.score)||0));
-        // FAST no hace confirmaciones adicionales aquí.
-        // Mantenerlas diferidas evita consumir subrequests y permite que el radar
-        // analice todos los candidatos sin bloquearse por el límite del Worker.
-        for(const x of data){
-          if(!x.confirmation)x.confirmation=confirmationFromSources(x.insider,x.institutional,x.congress,x.options);
-        }
         return json({
           status:"ok",mode:"FAST_SUBREQUEST_SAFE",data,generatedAt:new Date().toISOString(),
           sources:{
-            sec:true,marketHistoryFallbacks:["Stooq","Yahoo Finance","Twelve Data"],
-            options:"Yahoo Finance/Twelve Data on detail",institutional13F:"detail only",
-            congress:Boolean(env.QUIVER_API_KEY),"confirmationTopN":0
+            sec:false,
+            marketHistoryFallbacks:["Stooq","Yahoo Finance","Twelve Data"],
+            options:"deferred to detail",institutional13F:"detail only",
+            congress:"detail only",confirmationTopN:0
           }
         });
       }
-        // DETAIL_SAFE: un solo símbolo y solo dependencias acotadas.
+ un solo símbolo y solo dependencias acotadas.
         // No cargamos snapshots globales de 13F ni historial profundo de SEC aquí:
         // esas consultas pueden superar el límite de subrequests de Cloudflare.
         const detailSymbols = symbols.slice(0,1);
