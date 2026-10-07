@@ -1034,7 +1034,11 @@ async function smartMoneyFastData(symbol,env,secDirectory={},institutionalSnap=[
   // el modelo temprano detecte actividad. Esto evita casos como TOST:
   // Opportunity alto + STRONG_OUTFLOW.
   let opportunityScore=earlyScore;
-  if(marketFlow.signal==="STRONG_OUTFLOW"){
+  // Un flujo fuerte no convierte una señal tardía en una oportunidad temprana.
+  // Si Early Money es LATE_OR_WEAK, el Opportunity debe quedar en 0.
+  if(earlySmartMoney.signal==="LATE_OR_WEAK"){
+    opportunityScore=0;
+  } else if(marketFlow.signal==="STRONG_OUTFLOW"){
     opportunityScore=Math.min(opportunityScore,35);
   } else if(marketFlow.signal==="OUTFLOW"){
     opportunityScore=Math.min(opportunityScore,50);
