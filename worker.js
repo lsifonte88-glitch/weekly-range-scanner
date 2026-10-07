@@ -905,8 +905,8 @@ function confirmationFromSources(insider={},institutional={},congress={},options
   const confidence=max>=4&&Math.abs(raw)>=3?"HIGH":max>=2?"MEDIUM":"LOW";
   return {score,signal,confidence,evidence,note:"Confirmación separada del Opportunity Score; 13F es trimestral y rezagado."};
 }
-function atrPercentFromValues(v, period=14) {
-  if(!Array.isArray(v) || v.length<period+1) return {atr:0,atrPct:0};
+function atrFromValues(v, period=14) {
+  if(!Array.isArray(v) || v.length<period+1) return {atr:0};
   const trs=[];
   for(let i=1;i<v.length;i++){
     const h=Number(v[i].high)||0, l=Number(v[i].low)||0, pc=Number(v[i-1].close)||0;
@@ -914,10 +914,7 @@ function atrPercentFromValues(v, period=14) {
     trs.push(Math.max(h-l,Math.abs(h-pc),Math.abs(l-pc)));
   }
   const recent=trs.slice(-period);
-  const atr=recent.length?avg(recent):0;
-  const close=Number(v.at(-1)?.close)||0;
-  const atrPct=close>0?(atr/close)*100:0;
-  return {atr,atrPct};
+  return {atr:recent.length?avg(recent):0};
 }
 
 function earlySmartMoneyFromValues(v, source) {
@@ -928,9 +925,8 @@ function earlySmartMoneyFromValues(v, source) {
   const avgDollar20=avg(prev.slice(-20).map(x=>x.close*x.volume));
   const dollarRel=avgDollar20?(last.close*last.volume)/avgDollar20:0;
   const p3=pct(last.close,v.at(-4)?.close),p5=pct(last.close,v.at(-6)?.close),p10=pct(last.close,v.at(-11)?.close),p20=pct(last.close,v.at(-21)?.close);
-  const atrInfo=atrPercentFromValues(v,14);
-  const atr=atrInfo.atr, atrPct=atrInfo.atrPct;
-  if(!Number.isFinite(atrPct) || atrPct<3){ return {signal:"DISCARDED_ATR",score:0,opportunityScore:0,atr,atrPct,rvol,dollarRel,source,reasons:["ATR(14) < 3%"],note:"Descartada: capacidad de movimiento insuficiente para el swing."}; }
+  const atr=atrFromValues(v,14).atr;
+  if(!Number.isFinite(atr) || atr<3){ return {signal:"DISCARDED_ATR",score:0,opportunityScore:0,atr,rvol,dollarRel,source,reasons:["ATR(14) < $3"],note:"Descartada: rango medio real inferior a $3 por sesión."}; }
   const last20=v.slice(-20);
   const totalPV=last20.reduce((s,x)=>s+(((x.high+x.low+x.close)/3)*x.volume),0);
   const totalVol=last20.reduce((s,x)=>s+x.volume,0);
@@ -1005,7 +1001,7 @@ function earlySmartMoneyFromValues(v, source) {
 
   score=Math.max(0,Math.min(100,Math.round(score)));
   const signal=score>=75?"EARLY_ACCUMULATION":score>=60?"DEVELOPING":score<=35?"LATE_OR_WEAK":"NEUTRAL";
-  return {signal,score,rvol,dollarRel,dollarImbalance,rvolAcceleration,priceChange3D:p3,priceChange5D:p5,priceChange10D:p10,priceChange20D:p20,atr,atrPct,vwap,vwapDistance,rangePosition,breakoutExtension,source,reasons,note:"Modelo de acumulación temprana + filtro duro ATR(14) >= 3%; prioriza acciones con capacidad real de movimiento para swings."};
+  return {signal,score,rvol,dollarRel,dollarImbalance,rvolAcceleration,priceChange3D:p3,priceChange5D:p5,priceChange10D:p10,atr,vwap,vwapDistance,rangePosition,breakoutExtension,source,reasons,note:"Modelo de acumulación temprana + filtro duro ATR(14) >= $3; prioriza acciones y ETFs con capacidad real de movimiento para swings."};
 }
 async function smartMoneyFastData(symbol,env,secDirectory={},institutionalSnap=[]){
   // RADAR: el FAST debe detectar movimiento temprano usando precio/volumen.
