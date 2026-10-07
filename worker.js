@@ -864,7 +864,7 @@ function earlySmartMoneyFromValues(v, source) {
   const rvol=avgVol20?last.volume/avgVol20:0;
   const avgDollar20=avg(prev.slice(-20).map(x=>x.close*x.volume));
   const dollarRel=avgDollar20?(last.close*last.volume)/avgDollar20:0;
-  const p3=pct(last.close,v.at(-4)?.close),p5=pct(last.close,v.at(-6)?.close),p10=pct(last.close,v.at(-11)?.close),p20=pct(last.close,v.at(-21)?.close);
+  const p3=pct(last.close,v.at(-4)?.close),p5=pct(last.close,v.at(-6)?.close),p10=pct(last.close,v.at(-11)?.close),p20=pct(last.close,v.at(-21)?.close);\n  const atrInfo=atrPercentFromValues(v,14);\n  const atr=atrInfo.atr, atrPct=atrInfo.atrPct;
   const last20=v.slice(-20);
   const totalPV=last20.reduce((s,x)=>s+(((x.high+x.low+x.close)/3)*x.volume),0);
   const totalVol=last20.reduce((s,x)=>s+x.volume,0);
@@ -939,7 +939,7 @@ function earlySmartMoneyFromValues(v, source) {
 
   score=Math.max(0,Math.min(100,Math.round(score)));
   const signal=score>=75?"EARLY_ACCUMULATION":score>=60?"DEVELOPING":score<=35?"LATE_OR_WEAK":"NEUTRAL";
-  return {signal,score,rvol,dollarRel,dollarImbalance,rvolAcceleration,priceChange3D:p3,priceChange5D:p5,priceChange10D:p10,priceChange20D:p20,vwap,vwapDistance,rangePosition,breakoutExtension,source,reasons,note:"Modelo de acumulación temprana basado en precio + volumen y estructura; penaliza precio en la parte alta del rango, ruptura ya extendida, distancia sobre VWAP y momentum avanzado; no identifica directamente al comprador institucional."};
+  return {signal,score,rvol,dollarRel,dollarImbalance,rvolAcceleration,priceChange3D:p3,priceChange5D:p5,priceChange10D:p10,priceChange20D:p20,atr,atrPct,vwap,vwapDistance,rangePosition,breakoutExtension,source,reasons,note:"Modelo de acumulación temprana + filtro duro ATR(14) >= 3%; prioriza acciones con capacidad real de movimiento para swings."};
 }
 async function smartMoneyFastData(symbol,env,secDirectory={},institutionalSnap=[]){
   // RADAR: el FAST debe detectar movimiento temprano usando precio/volumen.
