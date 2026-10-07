@@ -103,3 +103,5 @@ async function smDetails(symbol){
   }catch(e){console.error("SMART MONEY DETAIL ERROR:",e);status.textContent="ERROR: "+e.message}
 }
 function smSleep(ms){return new Promise(r=>setTimeout(r,ms));}
+window.smLoad=smLoad;
+window.smDetails=smDetails;
