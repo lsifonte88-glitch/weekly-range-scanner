@@ -857,6 +857,21 @@ function confirmationFromSources(insider={},institutional={},congress={},options
   const confidence=max>=4&&Math.abs(raw)>=3?"HIGH":max>=2?"MEDIUM":"LOW";
   return {score,signal,confidence,evidence,note:"Confirmación separada del Opportunity Score; 13F es trimestral y rezagado."};
 }
+function atrPercentFromValues(v, period=14) {
+  if(!Array.isArray(v) || v.length<period+1) return {atr:0,atrPct:0};
+  const trs=[];
+  for(let i=1;i<v.length;i++){
+    const h=Number(v[i].high)||0, l=Number(v[i].low)||0, pc=Number(v[i-1].close)||0;
+    if(h<=0 || l<=0 || pc<=0) continue;
+    trs.push(Math.max(h-l,Math.abs(h-pc),Math.abs(l-pc)));
+  }
+  const recent=trs.slice(-period);
+  const atr=recent.length?avg(recent):0;
+  const close=Number(v.at(-1)?.close)||0;
+  const atrPct=close>0?(atr/close)*100:0;
+  return {atr,atrPct};
+}
+
 function earlySmartMoneyFromValues(v, source) {
   if (!Array.isArray(v) || v.length < 25) return {signal:"UNAVAILABLE",score:0,source,note:"Insufficient history"};
   const last=v.at(-1), prev=v.slice(0,-1);
@@ -864,7 +879,7 @@ function earlySmartMoneyFromValues(v, source) {
   const rvol=avgVol20?last.volume/avgVol20:0;
   const avgDollar20=avg(prev.slice(-20).map(x=>x.close*x.volume));
   const dollarRel=avgDollar20?(last.close*last.volume)/avgDollar20:0;
-  const p3=pct(last.close,v.at(-4)?.close),p5=pct(last.close,v.at(-6)?.close),p10=pct(last.close,v.at(-11)?.close),p20=pct(last.close,v.at(-21)?.close);\n  const atrInfo=atrPercentFromValues(v,14);\n  const atr=atrInfo.atr, atrPct=atrInfo.atrPct;
+  const p3=pct(last.close,v.at(-4)?.close),p5=pct(last.close,v.at(-6)?.close),p10=pct(last.close,v.at(-11)?.close),p20=pct(last.close,v.at(-21)?.close);\n  const atrInfo=atrPercentFromValues(v,14);\n  const atr=atrInfo.atr, atrPct=atrInfo.atrPct;\n  if(!Number.isFinite(atrPct) || atrPct<3){ return {signal:"DISCARDED_ATR",score:0,opportunityScore:0,atr,atrPct,rvol,dollarRel,source,reasons:["ATR(14) < 3%"],note:"Descartada: capacidad de movimiento insuficiente para el swing."}; }
   const last20=v.slice(-20);
   const totalPV=last20.reduce((s,x)=>s+(((x.high+x.low+x.close)/3)*x.volume),0);
   const totalVol=last20.reduce((s,x)=>s+x.volume,0);
