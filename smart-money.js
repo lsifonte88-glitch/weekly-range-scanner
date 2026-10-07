@@ -77,7 +77,8 @@ async function smLoad(){
       status.textContent="Smart Money en tiempo real · analizando "+Math.min(i+8,scanList.length)+"/"+scanList.length+" candidatos ("+pct+"%)";
     }
     all.sort((a,b)=>(Number(b.score)||0)-(Number(a.score)||0));
-    smRenderRows(all.slice(0,25));
+    const eligible=all.filter(x=>Number(x.earlySmartMoney?.atrPct||0)>=3 && String(x.earlySmartMoney?.signal||"")!=="DISCARDED_ATR");
+    smRenderRows(eligible.slice(0,25));
     status.textContent="Radar terminado · "+eligible.length+" candidatos elegibles · ATR(14) mínimo 3% · ranking por Opportunity Score";
   }catch(e){console.error("SMART MONEY ERROR:",e);status.textContent="ERROR: "+e.message;rows.innerHTML=`<tr><td colspan="16" class="red">${smEscape(e.message)}</td></tr>`}
 }
