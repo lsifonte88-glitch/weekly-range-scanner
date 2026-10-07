@@ -879,7 +879,10 @@ function earlySmartMoneyFromValues(v, source) {
   const rvol=avgVol20?last.volume/avgVol20:0;
   const avgDollar20=avg(prev.slice(-20).map(x=>x.close*x.volume));
   const dollarRel=avgDollar20?(last.close*last.volume)/avgDollar20:0;
-  const p3=pct(last.close,v.at(-4)?.close),p5=pct(last.close,v.at(-6)?.close),p10=pct(last.close,v.at(-11)?.close),p20=pct(last.close,v.at(-21)?.close);\n  const atrInfo=atrPercentFromValues(v,14);\n  const atr=atrInfo.atr, atrPct=atrInfo.atrPct;\n  if(!Number.isFinite(atrPct) || atrPct<3){ return {signal:"DISCARDED_ATR",score:0,opportunityScore:0,atr,atrPct,rvol,dollarRel,source,reasons:["ATR(14) < 3%"],note:"Descartada: capacidad de movimiento insuficiente para el swing."}; }
+  const p3=pct(last.close,v.at(-4)?.close),p5=pct(last.close,v.at(-6)?.close),p10=pct(last.close,v.at(-11)?.close),p20=pct(last.close,v.at(-21)?.close);
+  const atrInfo=atrPercentFromValues(v,14);
+  const atr=atrInfo.atr, atrPct=atrInfo.atrPct;
+  if(!Number.isFinite(atrPct) || atrPct<3){ return {signal:"DISCARDED_ATR",score:0,opportunityScore:0,atr,atrPct,rvol,dollarRel,source,reasons:["ATR(14) < 3%"],note:"Descartada: capacidad de movimiento insuficiente para el swing."}; }
   const last20=v.slice(-20);
   const totalPV=last20.reduce((s,x)=>s+(((x.high+x.low+x.close)/3)*x.volume),0);
   const totalVol=last20.reduce((s,x)=>s+x.volume,0);
@@ -1081,7 +1084,8 @@ async function smartMoneyData(symbol,env,detail=false,institutionalSnap=[],issue
   const confirmationScore=confirmation.signal==="NO_CONFIRMATION" ? 0 : Number(confirmation.score||0);
   let score=Math.round(institutionalScore*0.55 + confirmationScore*0.45);
 
-  // No extension gate here: extension belongs to ANALIZAR, not Smart Money.\n  const flowDirection=confluence.direction==="INFLOW"?"INFLOW":confluence.direction==="OUTFLOW"?"OUTFLOW":marketFlow.signal;
+  // No extension gate here: extension belongs to ANALIZAR, not Smart Money.
+  const flowDirection=confluence.direction==="INFLOW"?"INFLOW":confluence.direction==="OUTFLOW"?"OUTFLOW":marketFlow.signal;
   const freshness={market:marketFlow.source==="Unavailable"?"UNAVAILABLE":"DAILY",insider:cik?"RECENT":"UNAVAILABLE",institutional:institutional.filers?"LAGGED":"UNAVAILABLE",congress:congress.count?"LAGGED":"UNAVAILABLE",options:options.enabled?"RECENT":"UNAVAILABLE"};
   const dataQuality=[cik?"SEC insider":"sin SEC insider",institutional.filers?institutional.filers+" 13F":"sin match 13F",congress.count?congress.count+" Congreso":"sin Congreso",options.enabled?"opciones OK":"sin opciones",marketFlow.signal!=="UNAVAILABLE"?"market flow "+marketFlow.source:"sin market flow"].join(" · ");
   const reasons=[];
