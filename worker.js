@@ -296,7 +296,7 @@ export default {
         // los tres candidatos con evidencia SEC/13F/opciones/Congreso. Así el radar
         // sigue dentro del presupuesto de subrequests y deja de mostrar todo como DEFERRED.
         data.sort((a,b)=>(Number(b.score)||0)-(Number(a.score)||0));
-        const top3=data.slice(0,3);
+        const top3=data.slice(0,1);
         let directory={}, resolvedSecMap={}, institutionalSnap=[];
         try{
           directory=await secTickerDirectory(env);
@@ -311,14 +311,14 @@ export default {
         for(const base of top3){
           try{
             const issuerName=directory[base.symbol]?.name||base.symbol;
-            const detail=await smartMoneyData(base.symbol,env,true,institutionalSnap,issuerName,resolvedSecMap);
+            const detail=await smartMoneyData(base.symbol,env,false,institutionalSnap,issuerName,resolvedSecMap);
             // Conservamos el Opportunity Score temprano como ranking principal.
             detail.score=base.score;
             detail.opportunityScore=base.opportunityScore;
             detail.earlyRawScore=base.earlyRawScore;
             detail.earlySmartMoney=base.earlySmartMoney;
             detail.capitalFlow=base.capitalFlow;
-            detail.mode="FAST_PLUS_TOP3_CONFIRMATION";
+            detail.mode="FAST_PLUS_TOP1_CONFIRMATION";
             data[data.findIndex(x=>x.symbol===base.symbol)]=detail;
           }catch(e){
             base.confirmation={score:0,signal:"NO_CONFIRMATION",confidence:"LOW",evidence:[],note:"Confirmación Top 3 no disponible en este ciclo."};
@@ -326,14 +326,14 @@ export default {
           }
         }
         return json({
-          status:"ok",mode:"FAST_PLUS_TOP3_CONFIRMATION",data,generatedAt:new Date().toISOString(),
+          status:"ok",mode:"FAST_PLUS_TOP1_CONFIRMATION",data,generatedAt:new Date().toISOString(),
           sources:{
             sec:Boolean(Object.keys(resolvedSecMap).length),
             marketHistoryFallbacks:["Stooq","Yahoo Finance","Twelve Data"],
             options:"Twelve Data/Yahoo Finance · Top 3",
             institutional13F:"SEC 13F · Berkshire Hathaway + State Street · Top 3",
             congress:Boolean(env.QUIVER_API_KEY)?"Quiver Quantitative · Top 3":"no configurado",
-            confirmationTopN:3
+            confirmationTopN:1
           }
         });
       }
@@ -1142,4 +1142,4 @@ async function smartMoneyData(symbol,env,detail=false,institutionalSnap=[],issue
   if(!reasons.length) reasons.push("sin confluencia direccional suficiente");
   return {symbol,score,smartMoneyScore:score,flowDirection,marketFlow,earlySmartMoney,confluence,confirmation,reasons,insider,institutional,congress,unusual,options,etf,technical,freshness,dataQuality,asOf:new Date().toISOString(),events:detail?[...(insider.events||[]),...(institutional.events||[]),...(congress.events||[])]:[]};
 }
-// Deploy trigger: Smart Money FAST confirmation calls remain deferred to protect Worker subrequest budget.
+// Deploy trigger: Smart Money confirma solo el candidato #1 con dependencias acotadas para respetar el presupuesto de subrequests.
