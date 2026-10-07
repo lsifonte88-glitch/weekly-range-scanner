@@ -500,10 +500,9 @@ async function insiderData(symbol,cik,env,detail=false){
   const sub=await secFetch(SEC+"/submissions/CIK"+cik+".json",env);
   if(sub.status!==200)return {signal:"NEUTRAL",count:0,netValue:0,events:[],error:"SEC submissions HTTP "+sub.status};
   const j=JSON.parse(sub.text), r=j.filings?.recent||{}, events=[];
-  for(let i=0;i<(r.form||[]).length && events.length<8 && i<4;i++){
-    // Para mantener el radar dentro del límite de subrequests de Cloudflare,
-    // usamos primero Form 4, que concentra las operaciones reportadas de insiders.
-    if(r.form[i]!=="4")continue;
+  for(let i=0;i<(r.form||[]).length && events.length<10 && i<12;i++){
+    const form=String(r.form[i]||"");
+    if(form!=="3" && form!=="4" && form!=="5") continue;
     const accession=r.accessionNumber[i], primary=r.primaryDocument[i], filingDate=r.filingDate[i], reportDate=r.reportDate?.[i]||filingDate;
     const url=SEC_WWW+"/Archives/edgar/data/"+String(Number(cik))+"/"+accession.replaceAll("-","")+"/"+primary;
     const doc=await secFetch(url,env);
@@ -511,11 +510,17 @@ async function insiderData(symbol,cik,env,detail=false){
     const xml=doc.text;
     const names=[...xml.matchAll(/<issuerName[^>]*>([\s\S]*?)<\/issuerName>/gi)].map(m=>m[1].replace(/<[^>]+>/g,"").trim());
     const rows=[...xml.matchAll(/<nonDerivativeTransaction>([\s\S]*?)<\/nonDerivativeTransaction>/gi)].map(m=>m[1]);
-    for(const row of rows.slice(0,6)){
+    // Form 3 registra la posición inicial; Form 4/5 pueden contener compras/ventas.
+    if(form==="3" && !rows.length){
+      events.push({source:"SEC Form 3",date:reportDate,type:"INSIDER",actor:names[0]||symbol,action:"HOLDING",shares:0,amount:0,value:"",filingDate,url});
+      continue;
+    }
+    for(const row of rows.slice(0,8)){
       const code=xmlText(row,"transactionCode").toUpperCase(), shares=xmlNum(row,"transactionShares"), price=xmlNum(row,"transactionPricePerShare");
       let action=code==="P"?"BUY":code==="S"?"SELL":"OTHER";
+      if(form==="3" && action==="OTHER") action="HOLDING";
       if(action==="OTHER")continue;
-      events.push({source:"SEC Form "+r.form[i],date:reportDate,type:"INSIDER",actor:names[0]||symbol,action,shares,amount:shares*price,value:shares&&price?("$"+(shares*price).toFixed(0)):"",filingDate,url});
+      events.push({source:"SEC Form "+form,date:reportDate,type:"INSIDER",actor:names[0]||symbol,action,shares,amount:shares*price,value:shares&&price?("$"+(shares*price).toFixed(0)):"",filingDate,url});
     }
   }
   const s=insiderSignal(events);
