@@ -303,7 +303,7 @@ export default {
           }
         });
       }
- un solo símbolo y solo dependencias acotadas.
+        // DETAIL_SAFE: un solo símbolo y solo dependencias acotadas.
         // No cargamos snapshots globales de 13F ni historial profundo de SEC aquí:
         // esas consultas pueden superar el límite de subrequests de Cloudflare.
         const detailSymbols = symbols.slice(0,1);
