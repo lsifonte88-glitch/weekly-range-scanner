@@ -293,7 +293,7 @@ export default {
           });
         }
         // CONFIRMATION TOP 3: después del radar temprano, enriquecemos únicamente
-        // los tres candidatos con evidencia SEC/13F/opciones/Congreso. Así el radar
+        // el candidato #1 con evidencia SEC/13F/opciones/Congreso. Así el radar
         // sigue dentro del presupuesto de subrequests y deja de mostrar todo como DEFERRED.
         data.sort((a,b)=>(Number(b.score)||0)-(Number(a.score)||0));
         const top3=data.slice(0,1);
@@ -321,8 +321,8 @@ export default {
             detail.mode="FAST_PLUS_TOP1_CONFIRMATION";
             data[data.findIndex(x=>x.symbol===base.symbol)]=detail;
           }catch(e){
-            base.confirmation={score:0,signal:"NO_CONFIRMATION",confidence:"LOW",evidence:[],note:"Confirmación Top 3 no disponible en este ciclo."};
-            base.dataQuality=(base.dataQuality||"")+" · confirmación no disponible";
+            base.confirmation={score:0,signal:"NO_CONFIRMATION",confidence:"LOW",evidence:[],note:"Confirmación no disponible en este ciclo.",error:e?.message||String(e)};
+            base.dataQuality=(base.dataQuality||"")+" · confirmación no disponible · "+(e?.message||String(e));
           }
         }
         return json({
@@ -330,9 +330,9 @@ export default {
           sources:{
             sec:Boolean(Object.keys(resolvedSecMap).length),
             marketHistoryFallbacks:["Stooq","Yahoo Finance","Twelve Data"],
-            options:"Twelve Data/Yahoo Finance · Top 3",
-            institutional13F:"SEC 13F · Berkshire Hathaway + State Street · Top 3",
-            congress:Boolean(env.QUIVER_API_KEY)?"Quiver Quantitative · Top 3":"no configurado",
+            options:"Twelve Data/Yahoo Finance · Top 1",
+            institutional13F:"SEC 13F · Berkshire Hathaway + State Street · Top 1",
+            congress:Boolean(env.QUIVER_API_KEY)?"Quiver Quantitative · Top 1":"no configurado",
             confirmationTopN:1
           }
         });
@@ -1026,9 +1026,9 @@ async function smartMoneyFastData(symbol,env,secDirectory={},institutionalSnap=[
     note:"Sin Unusual Whales: la presión de capital se infiere con precio, volumen, RVOL, VWAP y estructura."
   };
 
-  const insider={signal:"DEFERRED",count:0,netValue:0,events:[],note:"Form 4 se confirma solo en el Top 3."};
-  const options={enabled:false,signal:"DEFERRED",expiration:"",contracts:0,callVolume:0,putVolume:0,callOpenInterest:0,putOpenInterest:0,callPutRatio:null,callPutOIRatio:null,source:"Deferred",note:"Opciones se confirman solo en el Top 3."};
-  const congress={signal:"DEFERRED",count:0,buys:0,sells:0,events:[],note:"Congreso se confirma solo en el Top 3."};
+  const insider={signal:"DEFERRED",count:0,netValue:0,events:[],note:"Form 4 se confirma solo en el Top 1."};
+  const options={enabled:false,signal:"DEFERRED",expiration:"",contracts:0,callVolume:0,putVolume:0,callOpenInterest:0,putOpenInterest:0,callPutRatio:null,callPutOIRatio:null,source:"Deferred",note:"Opciones se confirman solo en el Top 1."};
+  const congress={signal:"DEFERRED",count:0,buys:0,sells:0,events:[],note:"Congreso se confirma solo en el Top 1."};
 
   // 13F es evidencia institucional rezagada; no se mezcla con el detector temprano.
   const managers=Number(institutional.filers||0);
@@ -1081,7 +1081,7 @@ async function smartMoneyFastData(symbol,env,secDirectory={},institutionalSnap=[
     insider,
     congress,
     options,
-    confirmation:{score:0,signal:"NO_CONFIRMATION",confidence:"LOW",evidence:[],note:"La confirmación SEC/Form 4, opciones y Congreso se ejecuta después sobre el Top 3."},
+    confirmation:{score:0,signal:"NO_CONFIRMATION",confidence:"LOW",evidence:[],note:"La confirmación SEC/Form 4, opciones y Congreso se ejecuta después sobre el Top 1."},
     reasons,
     etf:{signal:"DEFERRED",holdings:[],note:"Composición ETF no participa en el score."},
     technical:{signal:flowDirection==="INFLOW"?"BULLISH_FLOW":flowDirection==="OUTFLOW"?"BEARISH_FLOW":"MIXED"},
