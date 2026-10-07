@@ -292,14 +292,48 @@ export default {
             asOf:new Date().toISOString()
           });
         }
+        // CONFIRMATION TOP 3: después del radar temprano, enriquecemos únicamente
+        // los tres candidatos con evidencia SEC/13F/opciones/Congreso. Así el radar
+        // sigue dentro del presupuesto de subrequests y deja de mostrar todo como DEFERRED.
         data.sort((a,b)=>(Number(b.score)||0)-(Number(a.score)||0));
+        const top3=data.slice(0,3);
+        let directory={}, resolvedSecMap={}, institutionalSnap=[];
+        try{
+          directory=await secTickerDirectory(env);
+          for(const [ticker,x] of Object.entries(directory)) resolvedSecMap[ticker]=x.cik;
+        }catch(_){}
+        try{
+          // Para el radar solo necesitamos Berkshire y State Street como evidencia
+          // institucional de referencia; Vanguard/BlackRock quedan fuera para no
+          // consumir el presupuesto de subrequests.
+          institutionalSnap=await institutionalSnapshotCore(env);
+        }catch(_){}
+        for(const base of top3){
+          try{
+            const issuerName=directory[base.symbol]?.name||base.symbol;
+            const detail=await smartMoneyData(base.symbol,env,true,institutionalSnap,issuerName,resolvedSecMap);
+            // Conservamos el Opportunity Score temprano como ranking principal.
+            detail.score=base.score;
+            detail.opportunityScore=base.opportunityScore;
+            detail.earlyRawScore=base.earlyRawScore;
+            detail.earlySmartMoney=base.earlySmartMoney;
+            detail.capitalFlow=base.capitalFlow;
+            detail.mode="FAST_PLUS_TOP3_CONFIRMATION";
+            data[data.findIndex(x=>x.symbol===base.symbol)]=detail;
+          }catch(e){
+            base.confirmation={score:0,signal:"NO_CONFIRMATION",confidence:"LOW",evidence:[],note:"Confirmación Top 3 no disponible en este ciclo."};
+            base.dataQuality=(base.dataQuality||"")+" · confirmación no disponible";
+          }
+        }
         return json({
-          status:"ok",mode:"FAST_SUBREQUEST_SAFE",data,generatedAt:new Date().toISOString(),
+          status:"ok",mode:"FAST_PLUS_TOP3_CONFIRMATION",data,generatedAt:new Date().toISOString(),
           sources:{
-            sec:false,
+            sec:Boolean(Object.keys(resolvedSecMap).length),
             marketHistoryFallbacks:["Stooq","Yahoo Finance","Twelve Data"],
-            options:"deferred to detail",institutional13F:"detail only",
-            congress:"detail only",confirmationTopN:0
+            options:"Twelve Data/Yahoo Finance · Top 3",
+            institutional13F:"SEC 13F · Berkshire Hathaway + State Street · Top 3",
+            congress:Boolean(env.QUIVER_API_KEY)?"Quiver Quantitative · Top 3":"no configurado",
+            confirmationTopN:3
           }
         });
       }
@@ -567,6 +601,15 @@ function parse13f(xml){
   }).filter(x=>x.issuer);
 }
 
+async function institutionalSnapshotCore(env){
+  const out=[];
+  const managers=INSTITUTIONAL_MANAGERS.filter(m=>/Berkshire Hathaway|State Street/i.test(m.name));
+  for(const m of managers){
+    const x=await sec13fRecent(m.cik,env,2);
+    if(x.length)out.push(...x);
+  }
+  return out;
+}
 async function institutionalSnapshot(env){
   const out=[];
   for(const m of INSTITUTIONAL_MANAGERS){
