@@ -292,36 +292,23 @@ export default {
             asOf:new Date().toISOString()
           });
         }
-        // CONFIRMATION TOP 3: después del radar temprano, enriquecemos únicamente
-        // el candidato #1 con evidencia SEC/13F/opciones/Congreso. Así el radar
-        // sigue dentro del presupuesto de subrequests y deja de mostrar todo como DEFERRED.
+        // CONFIRMATION TOP 1 SAFE: solo llamadas acotadas y conocidas.
+        // No ejecutamos snapshots 13F globales aquí: eran la causa principal del
+        // exceso de subrequests. El 13F completo queda para DETAIL_SAFE.
         data.sort((a,b)=>(Number(b.score)||0)-(Number(a.score)||0));
-        const top3=data.slice(0,1);
-        let directory={}, resolvedSecMap={}, institutionalSnap=[];
-        try{
-          directory=await secTickerDirectory(env);
-          for(const [ticker,x] of Object.entries(directory)) resolvedSecMap[ticker]=x.cik;
-        }catch(_){}
-        try{
-          // Para el radar solo necesitamos Berkshire y State Street como evidencia
-          // institucional de referencia; Vanguard/BlackRock quedan fuera para no
-          // consumir el presupuesto de subrequests.
-          institutionalSnap=await institutionalSnapshotCore(env);
-        }catch(_){}
-        for(const base of top3){
+        const base=data[0];
+        if(base){
           try{
-            const issuerName=directory[base.symbol]?.name||base.symbol;
-            const detail=await smartMoneyData(base.symbol,env,false,institutionalSnap,issuerName,resolvedSecMap);
-            // Conservamos el Opportunity Score temprano como ranking principal.
-            detail.score=base.score;
-            detail.opportunityScore=base.opportunityScore;
-            detail.earlyRawScore=base.earlyRawScore;
-            detail.earlySmartMoney=base.earlySmartMoney;
-            detail.capitalFlow=base.capitalFlow;
-            detail.mode="FAST_PLUS_TOP1_CONFIRMATION";
-            data[data.findIndex(x=>x.symbol===base.symbol)]=detail;
+            const confirmation=await smartMoneyTop1Safe(base.symbol,env);
+            base.confirmation=confirmation;
+            base.mode="FAST_PLUS_TOP1_SAFE_CONFIRMATION";
+            base.dataQuality=(base.dataQuality||"")+" · "+(confirmation.sourcesUsed||[]).join(" · ");
           }catch(e){
-            base.confirmation={score:0,signal:"NO_CONFIRMATION",confidence:"LOW",evidence:[],note:"Confirmación no disponible en este ciclo.",error:e?.message||String(e)};
+            base.confirmation={
+              score:0,signal:"NO_CONFIRMATION",confidence:"LOW",evidence:[],
+              note:"Confirmación no disponible en este ciclo.",
+              error:e?.message||String(e)
+            };
             base.dataQuality=(base.dataQuality||"")+" · confirmación no disponible · "+(e?.message||String(e));
           }
         }
@@ -1092,6 +1079,68 @@ async function smartMoneyFastData(symbol,env,secDirectory={},institutionalSnap=[
     mode:"FAST_EARLY_FLOW",
     asOf:new Date().toISOString(),
     events:[]
+  };
+}
+
+async function smartMoneyTop1Safe(symbol,env){
+  const sourcesUsed=[], evidence=[], errors=[];
+  let buy=0, sell=0;
+
+  // 1) SEC ticker map: una sola petición.
+  let cik="";
+  try{
+    const map=await secTickers(env);
+    cik=map?.[symbol]||"";
+    sourcesUsed.push("SEC");
+  }catch(e){ errors.push("SEC map: "+(e?.message||String(e))); }
+
+  // 2) Form 4: submissions + un solo documento como máximo.
+  let insider={signal:"NEUTRAL",count:0,events:[]};
+  if(cik){
+    try{
+      insider=await insiderFastData(symbol,cik,env);
+      if(insider.signal==="BUY"){buy+=2;evidence.push("SEC Form 4 BUY");}
+      else if(insider.signal==="SELL"){sell+=2;evidence.push("SEC Form 4 SELL");}
+      sourcesUsed.push("Form 4");
+    }catch(e){ errors.push("Form 4: "+(e?.message||String(e))); }
+  }
+
+  // 3) Opciones: solo Yahoo, una petición. No hacemos el fallback Twelve Data
+  // (que puede encadenar dos llamadas adicionales).
+  try{
+    const options=await yahooOptionsFlow(symbol,env);
+    if(options?.signal==="CALL_HEAVY"){buy+=1;evidence.push("OPTIONS CALL HEAVY");}
+    else if(options?.signal==="PUT_HEAVY"){sell+=1;evidence.push("OPTIONS PUT HEAVY");}
+    sourcesUsed.push("Options");
+  }catch(e){ errors.push("Options: "+(e?.message||String(e))); }
+
+  // 4) Congreso: una sola petición si existe la API.
+  let congress={signal:"NEUTRAL",count:0};
+  if(env.QUIVER_API_KEY||env.CONGRESS_API_URL){
+    try{
+      congress=await congressData(symbol,env,false);
+      if(congress.signal==="BUY"){buy+=1;evidence.push("CONGRESS BUY");}
+      else if(congress.signal==="SELL"){sell+=1;evidence.push("CONGRESS SELL");}
+      sourcesUsed.push("Congress");
+    }catch(e){ errors.push("Congress: "+(e?.message||String(e))); }
+  }
+
+  const used=buy+sell;
+  let score=50, signal="NO_CONFIRMATION", confidence="LOW";
+  if(used>0){
+    const raw=buy-sell;
+    score=Math.max(0,Math.min(100,Math.round(50+(raw/used)*50)));
+    signal=raw>0?"CONFIRMED_INFLOW":raw<0?"CONFIRMED_OUTFLOW":"MIXED";
+    confidence=used>=3?"HIGH":used>=2?"MEDIUM":"LOW";
+  }
+  return {
+    score,signal,confidence,evidence,
+    insider,congress,
+    institutional:{signal:"UNAVAILABLE",score:0,filers:0,note:"13F global omitido del radar para respetar el presupuesto de subrequests; disponible en DETAIL_SAFE."},
+    options:{signal:"UNAVAILABLE",enabled:false,note:"Options confirmation via Yahoo is included in evidence when available."},
+    sourcesUsed,
+    errors,
+    note:"Confirmación Top 1 acotada: SEC/Form 4 + opciones + Congreso. 13F completo se reserva para DETAIL_SAFE."
   };
 }
 
