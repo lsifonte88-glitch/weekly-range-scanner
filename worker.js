@@ -313,13 +313,13 @@ export default {
           }
         }
         return json({
-          status:"ok",mode:"FAST_PLUS_TOP1_CONFIRMATION",data,generatedAt:new Date().toISOString(),
+          status:"ok",mode:"FAST_PLUS_TOP1_SAFE_CONFIRMATION",data,generatedAt:new Date().toISOString(),
           sources:{
-            sec:Boolean(Object.keys(resolvedSecMap).length),
+            sec:"SEC/Form 4 · Top 1",
             marketHistoryFallbacks:["Stooq","Yahoo Finance","Twelve Data"],
-            options:"Twelve Data/Yahoo Finance · Top 1",
-            institutional13F:"SEC 13F · Berkshire Hathaway + State Street · Top 1",
-            congress:Boolean(env.QUIVER_API_KEY)?"Quiver Quantitative · Top 1":"no configurado",
+            options:"Yahoo Finance · Top 1",
+            institutional13F:"DETAIL_SAFE only",
+            congress:Boolean(env.QUIVER_API_KEY)?"Quiver Quantitative · Top 1":"not configured",
             confirmationTopN:1
           }
         });
