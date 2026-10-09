@@ -918,13 +918,9 @@ function earlySmartMoneyFromValues(v, source) {
   const p20=pct(last.close,v.at(-21)?.close);
 
   const atr=atrFromValues(v,14).atr;
-  if(!Number.isFinite(atr) || atr<3){
-    return {
-      signal:"DISCARDED_ATR",score:0,opportunityScore:0,atr,rvol,dollarRel,source,
-      reasons:["ATR(14) < $3"],
-      note:"Descartada: rango medio real inferior a $3 por sesión."
-    };
-  }
+  // ATR se conserva como medida de volatilidad, pero no se usa un umbral fijo en dólares:
+  // ese filtro sesga la cobertura hacia acciones caras y excluye señales de volumen temprano.
+  const atrPct=last.close>0?(atr/last.close)*100:0;
 
   const slice20=v.slice(-20);
   const slice10=v.slice(-10);
@@ -1066,9 +1062,9 @@ function earlySmartMoneyFromValues(v, source) {
   return {
     signal,score,rvol,dollarRel,dollarImbalance,rvolAcceleration,dollarAcceleration,
     priceChange3D:p3,priceChange5D:p5,priceChange10D:p10,priceChange20D:p20,
-    atr,vwap,vwapDistance,rangePosition,breakoutDistance,breakoutExtension,
+    atr,atrPct,vwap,vwapDistance,rangePosition,breakoutDistance,breakoutExtension,
     compressionRatio,ema20,ema50,upDayRatio,source,reasons,
-    note:"Modelo pre-breakout: aceleración de volumen + acumulación + compresión + proximidad a ruptura + tendencia, con penalización por movimiento ya extendido. ATR(14) >= $3."
+    note:"Modelo pre-breakout: aceleración de volumen + acumulación + compresión + proximidad a ruptura + tendencia, con penalización por movimiento ya extendido. ATR se informa en dólares y % del precio; no hay umbral fijo en dólares."
   };
 }
 async function smartMoneyFastData(symbol,env,secDirectory={},institutionalSnap=[]){
