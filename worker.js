@@ -237,7 +237,7 @@ export default {
         return new Response(await r.text(), { headers: { "content-type": "text/html; charset=UTF-8", "cache-control": "no-store" } });
       }
       if (url.pathname === "/smart-money.js" || url.pathname === "/smart-money-v2.js") {
-        const r = await fetch("https://raw.githubusercontent.com/lsifonte88-glitch/weekly-range-scanner/main/smart-money.js?v=12e6d5abefa9e16f6318cbe11cad86cfec940bc0", { cf: { cacheTtl: 0 } });
+        const r = await fetch("https://raw.githubusercontent.com/lsifonte88-glitch/weekly-range-scanner/main/smart-money.js?v=early-regime-20261009", { cf: { cacheTtl: 0 } });
         if (!r.ok) return new Response("No se pudo cargar Smart Money.", { status: 502 });
         return new Response(await r.text(), { headers: { "content-type": "application/javascript; charset=UTF-8", "cache-control": "no-store" } });
       }
@@ -960,6 +960,10 @@ function earlySmartMoneyFromValues(v, source) {
   const closes=v.map(x=>Number(x.close)||0).filter(x=>x>0);
   const ema20=ema(closes.slice(-60),20);
   const ema50=ema(closes.slice(-100),50);
+  const ema200=ema(closes.slice(-260),200);
+  const trendState=last.close>ema200
+    ? (last.close>ema20&&ema20>ema50 ? "UPTREND_ABOVE_EMA200" : "ABOVE_EMA200")
+    : (last.close>ema20&&ema20>ema50 ? "RECOVERY_BELOW_EMA200" : "BELOW_EMA200");
 
   let upDollar=0,downDollar=0,upDays=0;
   for(const x of slice10){
@@ -1035,15 +1039,15 @@ function earlySmartMoneyFromValues(v, source) {
 
   // 6) Momentum controlado. Evita comprar el movimiento ya hecho.
   if(p5>=-1&&p5<=3){score+=8;reasons.push("momentum temprano");}
-  else if(p5>3&&p5<=6){score+=4;reasons.push("momentum acelerando");}
-  else if(p5>6&&p5<=10){score-=6;reasons.push("movimiento avanzado");}
-  else if(p5>10){score-=18;reasons.push("movimiento demasiado extendido");}
-  else if(p5<-5){score-=8;reasons.push("momentum débil");}
+  else if(p5>3&&p5<=5){score+=2;reasons.push("momentum acelerando");}
+  else if(p5>5&&p5<=8){score-=12;reasons.push("movimiento avanzado: riesgo de entrada tardía");}
+  else if(p5>8){score-=22;reasons.push("movimiento 5D demasiado extendido");}
 
-  if(p10>=-2&&p10<=8){score+=5;reasons.push("avance 10D controlado");}
-  else if(p10>15){score-=10;reasons.push("avance 10D avanzado");}
-  if(p20>25){score-=15;reasons.push("subida 20D demasiado avanzada");}
-  else if(p20>15){score-=8;reasons.push("subida 20D avanzada");}
+  if(p10>=-2&&p10<=6){score+=5;reasons.push("avance 10D controlado");}
+  else if(p10>6&&p10<=12){score-=4;reasons.push("avance 10D maduro");}
+  else if(p10>12){score-=14;reasons.push("avance 10D avanzado");}
+  if(p20>25){score-=18;reasons.push("subida 20D demasiado avanzada");}
+  else if(p20>15){score-=10;reasons.push("subida 20D avanzada");}
 
   // 7) VWAP: cerca/sobre, pero no muy extendida.
   if(vwapDistance>=-1&&vwapDistance<=3){score+=7;reasons.push("cerca de VWAP");}
@@ -1057,10 +1061,13 @@ function earlySmartMoneyFromValues(v, source) {
   else if(breakoutExtension>=0.5){score-=6;reasons.push("sobre máximo previo");}
 
   score=Math.max(0,Math.min(100,Math.round(score)));
-  const signal=score>=75?"EARLY_ACCUMULATION":score>=60?"DEVELOPING":score<=35?"LATE_OR_WEAK":"NEUTRAL";
+  const lateMove=p5>8 || p10>15 || p20>25 || vwapDistance>7 || breakoutExtension>=2;
+  const signal=lateMove?"LATE_OR_WEAK":score>=75?"EARLY_ACCUMULATION":score>=60?"DEVELOPING":score<=35?"LATE_OR_WEAK":"NEUTRAL";
+  if(lateMove) reasons.push("ETIQUETA TARDÍA: no tratar como acumulación temprana");
+  reasons.push("Régimen técnico: "+(trendState==="UPTREND_ABOVE_EMA200"?"tendencia alcista sobre EMA200":trendState==="RECOVERY_BELOW_EMA200"?"recuperación táctica bajo EMA200":trendState==="ABOVE_EMA200"?"sobre EMA200, alineación incompleta":"bajo EMA200; tendencia larga aún débil"));
 
   return {
-    signal,score,rvol,dollarRel,dollarImbalance,rvolAcceleration,dollarAcceleration,
+    signal,score,trendState,ema200,rvol,dollarRel,dollarImbalance,rvolAcceleration,dollarAcceleration,
     priceChange3D:p3,priceChange5D:p5,priceChange10D:p10,priceChange20D:p20,
     atr,atrPct,vwap,vwapDistance,rangePosition,breakoutDistance,breakoutExtension,
     compressionRatio,ema20,ema50,upDayRatio,source,reasons,
