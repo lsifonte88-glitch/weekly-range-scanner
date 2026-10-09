@@ -65,7 +65,8 @@ async function smLoad(){
     // Ampliamos el embudo: el prefilter descubre muchos candidatos y Smart Money
     // confirma un grupo mayor. 8 era demasiado estrecho para encontrar oportunidades
     // como ERO antes de que aparecieran entre los primeros ganadores.
-    const scanList=[...new Set(scanCandidates.map(x=>String(x).toUpperCase().replace(/[^A-Z0-9.\\-]/g,"")).filter(Boolean))].slice(0,16);
+    // M y MUU se prueban siempre, aunque no aparezcan entre los movers principales.
+    const scanList=[...new Set(["M","MUU",...scanCandidates.map(x=>String(x).toUpperCase().replace(/[^A-Z0-9.\\-]/g,"")).filter(Boolean)])].slice(0,16);
     if(!scanList.length)throw new Error("El mercado no devolvió candidatos.");
     let all=[];
     for(let i=0;i<scanList.length;i+=8){
@@ -77,9 +78,9 @@ async function smLoad(){
       status.textContent="Smart Money en tiempo real · analizando "+Math.min(i+8,scanList.length)+"/"+scanList.length+" candidatos ("+pct+"%)";
     }
     all.sort((a,b)=>(Number(b.score)||0)-(Number(a.score)||0));
-    const eligible=all.filter(x=>String(x.earlySmartMoney?.signal||"")!=="DISCARDED_ATR" && String(x.earlySmartMoney?.signal||"")!=="LATE_OR_WEAK" && Number(x.earlySmartMoney?.atr||0)>=3 && Number(x.opportunityScore??x.score??0)>0);
+    const eligible=all.filter(x=>String(x.earlySmartMoney?.signal||"")!=="LATE_OR_WEAK" && Number(x.opportunityScore??x.score??0)>0);
     smRenderRows(eligible.slice(0,25));
-    status.textContent="Radar terminado · "+eligible.length+" candidatos elegibles · filtro interno ATR(14) ≥ $3 · ranking por Opportunity Score";
+    status.textContent="Radar terminado · "+scanList.length+" candidatos analizados (M y MUU incluidos) · "+eligible.length+" oportunidades con score positivo · ATR informativo, sin umbral fijo en dólares";
   }catch(e){console.error("SMART MONEY ERROR:",e);status.textContent="ERROR: "+e.message;rows.innerHTML=`<tr><td colspan="16" class="red">${smEscape(e.message)}</td></tr>`}
 }
 
