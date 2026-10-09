@@ -1130,11 +1130,19 @@ async function smartMoneyFastData(symbol,env,secDirectory={},institutionalSnap=[
     opportunityScore=Math.min(opportunityScore,35);
   } else if(marketFlow.signal==="OUTFLOW"){
     opportunityScore=Math.min(opportunityScore,50);
+  } else if(marketFlow.signal==="ABNORMAL_ACTIVITY"){
+    // Divergencia con precio subiendo y volumen vendedor = distribución,
+    // no debe liderar el ranking de oportunidades LONG.
+    if(Number(marketFlow.priceChange5D)>0) opportunityScore=Math.min(opportunityScore,40);
+    else opportunityScore=Math.min(opportunityScore,55);
   } else if(marketFlow.signal==="STRONG_INFLOW"){
     opportunityScore=Math.min(100,opportunityScore+5);
   } else if(marketFlow.signal==="INFLOW"){
     opportunityScore=Math.min(100,opportunityScore+2);
   }
+  // Mantener posibles recuperaciones tácticas bajo EMA200, pero penalizar
+  // estructuras aún débiles para que no superen señales alcistas mejor alineadas.
+  if(earlySmartMoney.trendState==="BELOW_EMA200") opportunityScore-=8;
   opportunityScore=Math.max(0,Math.min(100,Math.round(opportunityScore)));
   const flowDirection=marketFlow.signal==="STRONG_INFLOW"||marketFlow.signal==="INFLOW"
     ?"INFLOW":marketFlow.signal==="STRONG_OUTFLOW"||marketFlow.signal==="OUTFLOW"
