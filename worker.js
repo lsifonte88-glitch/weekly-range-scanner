@@ -1061,9 +1061,13 @@ function earlySmartMoneyFromValues(v, source) {
   else if(breakoutExtension>=0.5){score-=6;reasons.push("sobre máximo previo");}
 
   score=Math.max(0,Math.min(100,Math.round(score)));
-  const lateMove=p5>8 || p10>15 || p20>25 || vwapDistance>7 || breakoutExtension>=2;
+  // Penalización compuesta: un avance 5D moderado puede ser sano,
+  // pero 5D >5% junto con avance 10D maduro, extensión sobre VWAP
+  // o ruptura ya consumida se clasifica como entrada tardía.
+  const lateMove=p5>8 || p10>15 || p20>25 || vwapDistance>7 || breakoutExtension>=2
+    || (p5>5 && (p10>6 || vwapDistance>5 || breakoutExtension>=0.5));
   const signal=lateMove?"LATE_OR_WEAK":score>=75?"EARLY_ACCUMULATION":score>=60?"DEVELOPING":score<=35?"LATE_OR_WEAK":"NEUTRAL";
-  if(lateMove) reasons.push("ETIQUETA TARDÍA: no tratar como acumulación temprana");
+  if(lateMove) reasons.push("ETIQUETA TARDÍA: extensión compuesta; no tratar como acumulación temprana");
   reasons.push("Régimen técnico: "+(trendState==="UPTREND_ABOVE_EMA200"?"tendencia alcista sobre EMA200":trendState==="RECOVERY_BELOW_EMA200"?"recuperación táctica bajo EMA200":trendState==="ABOVE_EMA200"?"sobre EMA200, alineación incompleta":"bajo EMA200; tendencia larga aún débil"));
 
   return {
