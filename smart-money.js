@@ -105,4 +105,20 @@ async function smDetails(symbol){
 }
 function smSleep(ms){return new Promise(r=>setTimeout(r,ms));}
 window.smLoad=smLoad;
+async function smOptionsFlow(){
+ const status=document.getElementById("ofStatus"),rows=document.getElementById("ofRows"),btn=document.getElementById("ofAnalyze");
+ if(btn)btn.disabled=true;if(status)status.textContent="Consultando proveedor de opciones…";
+ try{
+  const r=await fetch("https://weekly-range-api.changowalu.workers.dev/options-flow?limit=75",{cache:"no-store"});
+  const j=await r.json();
+  if(!r.ok){if(status)status.textContent=j.message||("Error Options Flow: HTTP "+r.status);if(rows)rows.innerHTML='<tr><td colspan="10">Feed no disponible. No se muestran datos inventados.</td></tr>';return;}
+  let d=j.data;let a=Array.isArray(d)?d:(Array.isArray(d?.data)?d.data:(Array.isArray(d?.rows)?d.rows:(Array.isArray(d?.results)?d.results:(Array.isArray(d?.items)?d.items:[]))));
+  if(status)status.textContent="Proveedor: "+(j.provider||"OptionsBell")+" · Actualizado: "+(j.retrievedAt||"—")+" · Filas: "+a.length+" · Prima estimada; no confirma por sí sola compra institucional.";
+  const esc=smEscape;
+  if(rows)rows.innerHTML=a.length?a.map(x=>{const sym=x.symbol||x.underlying_symbol||x.ticker||"—";const contract=x.option_symbol||x.contract||x.optionSymbol||"—";const typ=x.type||x.option_type||x.right||"—";const exp=x.expiration||x.expiry||x.expiration_date||"—";const prem=x.premium??x.total_value??x.estimated_premium??x.premium_estimate;const vol=x.volume??x.total_volume??x.trade_volume;const oi=x.open_interest??x.openInterest??x.oi;const ratio=x.volume_oi_ratio??x.vol_oi??x.volume_oi;const sent=x.sentiment||x.side||x.direction||"—";const dt=x.timestamp||x.generated_at||x.date||x.as_of||"—";return '<tr><td><b>'+esc(sym)+'</b></td><td>'+esc(contract)+'</td><td>'+esc(typ)+'</td><td>'+esc(exp)+'</td><td>'+esc(prem==null?"—":smMoney(Number(prem)))+'</td><td>'+esc(vol??"—")+'</td><td>'+esc(oi??"—")+'</td><td>'+esc(ratio==null?"—":Number(ratio).toFixed(2)+"x")+'</td><td>'+smBadge(sent)+'</td><td>'+esc(dt)+'</td></tr>'}).join(""):'<tr><td colspan="10">El proveedor no devolvió filas con estos datos. Revisa el esquema/API del plan.</td></tr>';
+ }catch(e){if(status)status.textContent="Error Options Flow: "+e.message;if(rows)rows.innerHTML='<tr><td colspan="10">No se pudo consultar el feed.</td></tr>';}
+ finally{if(btn)btn.disabled=false;}
+}
+window.smOptionsFlow=smOptionsFlow;
+
 window.smDetails=smDetails;
