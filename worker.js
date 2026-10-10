@@ -258,6 +258,20 @@ export default {
         if(!out.symbols.length)return json({status:"error",message:"No se detectaron movimientos de mercado."},502);
         return json({status:"ok",...out,generatedAt:new Date().toISOString(),source:"Yahoo Finance screeners",note:"Prefiltro orientado a anticipación: actividad + crecimiento + small caps, priorizando volumen acelerando con movimiento de precio todavía contenido."},200,{"cache-control":"no-store"});
       }
+      if (url.pathname === "/options-flow") {
+        if (!env.OPTIONSBELL_API_KEY) {
+          return json({status:"not_configured",provider:"OptionsBell",message:"Falta configurar OPTIONSBELL_API_KEY como secreto del Worker. No se muestran datos simulados."},503);
+        }
+        const limit=Math.max(1,Math.min(100,Number(url.searchParams.get("limit"))||50));
+        const endpoint=new URL("https://optionsbell.com/api/v1/options-flow/unusual");
+        endpoint.searchParams.set("limit",String(limit));
+        const response=await fetchWithTimeout(endpoint,{method:"GET",headers:{"X-API-Key":env.OPTIONSBELL_API_KEY,"accept":"application/json"}},10000);
+        const body=await response.text();
+        let parsed;
+        try{parsed=JSON.parse(body)}catch{parsed={raw:body.slice(0,1000)}}
+        if(!response.ok)return json({status:"provider_error",provider:"OptionsBell",httpStatus:response.status,data:parsed},502);
+        return json({status:"ok",provider:"OptionsBell",retrievedAt:new Date().toISOString(),data:parsed},200,{"cache-control":"no-store"});
+      }
       if (url.pathname === "/smart-money") {
         const symbols = cleanSymbols(url.searchParams.get("symbols") || url.searchParams.get("symbol"));
         if (!symbols.length) return json({status:"error",message:"Falta symbol o symbols."},400);
