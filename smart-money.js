@@ -112,10 +112,26 @@ async function smLoad(){
       const pct=Math.min(100,Math.round((Math.min(i+8,scanList.length)/scanList.length)*100));
       status.textContent="Smart Money en tiempo real · analizando "+Math.min(i+8,scanList.length)+"/"+scanList.length+" candidatos ("+pct+"%)";
     }
+    // Garantiza que los símbolos del CSV importado aparezcan aunque falten en la respuesta API.
+    const returned=new Set(all.map(x=>String(x.symbol||"").toUpperCase()));
+    for(const [symbol,imp] of smImportedOptionsBySymbol){
+      if(!returned.has(symbol)){
+        all.push({symbol,score:Math.max(1,Number(imp.score)||1),opportunityScore:Math.max(1,Number(imp.score)||1),
+          flowDirection:"MIXED",marketFlow:{signal:"UNAVAILABLE",rvol:0,priceChange5D:0},
+          insider:{signal:"DEFERRED",count:0,netValue:0},institutional:{signal:"NEUTRAL",filers:0},
+          congress:{signal:"DEFERRED",count:0},unusual:{signal:"NORMAL",rvol:0},
+          etf:{signal:"DEFERRED"},options:{signal:"CSV_XYNTH"},confluence:{confidence:"CSV"},
+          confirmation:{score:0,signal:"NO_CONFIRMATION"},earlySmartMoney:{signal:"CSV_IMPORTED",score:0,trendState:""},
+          reasons:["Símbolo importado desde CSV Xynth; sin datos técnicos devueltos por la API"],
+          dataQuality:"Solo flujo CSV Xynth; datos técnicos no disponibles",asOf:new Date().toISOString()});
+      }
+    }
     all.sort((a,b)=>(Number(b.score)||0)-(Number(a.score)||0));
-    const eligible=all.filter(x=>String(x.earlySmartMoney?.signal||"")!=="LATE_OR_WEAK" && Number(x.opportunityScore??x.score??0)>0);
+    const importedSet=new Set(smImportedOptionsBySymbol.keys());
+    const eligible=all.filter(x=>importedSet.has(String(x.symbol||"").toUpperCase()) ||
+      (String(x.earlySmartMoney?.signal||"")!=="LATE_OR_WEAK" && Number(x.opportunityScore??x.score??0)>0));
     smRenderRows(eligible.slice(0,25));
-    status.textContent="Radar terminado · "+scanList.length+" candidatos analizados (M y MUU incluidos) · "+eligible.length+" oportunidades con score positivo · ATR informativo, sin umbral fijo en dólares";
+    status.textContent="Radar terminado · "+scanList.length+" candidatos analizados (M y MUU incluidos) · "+eligible.length+" filas visibles · CSV Xynth integrado cuando hay símbolos importados · ATR informativo";
   }catch(e){console.error("SMART MONEY ERROR:",e);status.textContent="ERROR: "+e.message;rows.innerHTML=`<tr><td colspan="16" class="red">${smEscape(e.message)}</td></tr>`}
 }
 
