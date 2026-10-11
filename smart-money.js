@@ -133,6 +133,8 @@ function ofParseCsv(text){
  const first=lines[0],comma=(first.match(/,/g)||[]).length,pipe=(first.match(/\|/g)||[]).length,delimiter=pipe>comma?"|":",";
  const norm=s=>String(s||"").trim().toLowerCase().replace(/^\uFEFF/,"").replace(/[\u00a0]/g," ").replace(/[%]/g," %").replace(/[_-]+/g," ").replace(/\s+/g," ").trim();
  const headers=split(first,delimiter).map(norm);
+ const inferredSymbolHeader=headers.find(h=>/^[a-z][a-z0-9.]* px$/.test(h));
+ const inferredSymbol=inferredSymbolHeader?inferredSymbolHeader.replace(/ px$/,"").toUpperCase():"";
  const rows=lines.slice(1).map(x=>split(x,delimiter));
  const aliases={
   symbol:["ticker","symbol","underlying","underlying symbol","root"],
@@ -159,7 +161,9 @@ function ofParseCsv(text){
   cross:["is cross","cross"],
   floor:["is floor","floor"],
   unusual:["unusual","is unusual"],
-  fillpos:["fill pos","fill position","fill pos %"],\n  opening:["possible opening","possible opening ","posible apertura","opening"],\n  flags:["flags","tags","trade codes","trade code","tags "],
+  fillpos:["fill pos","fill position","fill pos %"],
+  opening:["possible opening","possible opening ","posible apertura","opening"],
+  flags:["flags","tags","trade codes","trade code","tags "],
   exchange:["exchange","exch"]
  };
  const idx={};for(const [key,names] of Object.entries(aliases))idx[key]=headers.findIndex(h=>names.includes(h));
@@ -167,7 +171,9 @@ function ofParseCsv(text){
  const number=v=>{let z=String(v??"").trim().replace(/[$,%\s]/g,"").replace(/,/g,"");if(!z||z==="—"||z==="-"||z.toLowerCase()==="null")return null;const m=z.match(/^(-?\d*\.?\d+)\s*([KMB])?$/i);if(!m)return null;const mult=({K:1e3,M:1e6,B:1e9})[(m[2]||"").toUpperCase()]||1;return Number(m[1])*mult;};
  const truth=v=>/^(true|1|yes|y|sí|si)$/i.test(String(v||"").trim());
  return rows.map(r=>{
-  const symbol=(get(r,"symbol")||inferredSymbol).toUpperCase(),rawContract=get(r,"contract"),rawType=get(r,"type").toUpperCase();\n  const strike=number(get(r,"strike")),expiration=get(r,"expiration");\n  const contract=rawContract||(symbol&&rawType&&strike!=null?[symbol,rawType,strike,expiration].filter(Boolean).join(" "):"");
+  const symbol=(get(r,"symbol")||inferredSymbol).toUpperCase(),rawContract=get(r,"contract"),rawType=get(r,"type").toUpperCase();
+  const strike=number(get(r,"strike")),expiration=get(r,"expiration");
+  const contract=rawContract||(symbol&&rawType&&strike!=null?[symbol,rawType,strike,expiration].filter(Boolean).join(" "):"");
   const type=/CALL|LLAMAR|\bC\b/.test(rawType)?"CALL":/PUT|PONER|\bP\b/.test(rawType)?"PUT":"—";
   const side=get(r,"side").toLowerCase();
   const size=number(get(r,"size")),volume=number(get(r,"volume")),oi=number(get(r,"oi")),ratio=number(get(r,"ratio"));
