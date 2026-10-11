@@ -122,3 +122,47 @@ async function smOptionsFlow(){
 window.smOptionsFlow=smOptionsFlow;
 
 window.smDetails=smDetails;
+
+
+function ofParseCsv(text){
+ const lines=String(text||"").replace(/^\\uFEFF/,"").split(/\\r?\\n/).filter(x=>x.trim());
+ if(lines.length<2)throw new Error("El CSV no contiene filas.");
+ function split(line){let out=[],cur="",q=false;for(let i=0;i<line.length;i++){const c=line[i];if(c==='"'&&q&&line[i+1]==='"'){cur+='"';i++;}else if(c==='"')q=!q;else if(c===","&&!q){out.push(cur);cur="";}else cur+=c;}out.push(cur);return out;}
+ const headers=split(lines[0]).map(x=>x.trim().toLowerCase().replace(/[ _-]+/g," "));
+ const rows=lines.slice(1).map(split);
+ const idx=(...names)=>headers.findIndex(h=>names.includes(h));
+ const get=(r,...names)=>{const i=idx(...names);return i<0?"":(r[i]||"").trim()};
+ return rows.map(r=>({
+  symbol:get(r,"ticker","symbol","underlying"),
+  contract:get(r,"contract","option symbol","option_symbol"),
+  type:get(r,"side","call/put","put call","type","right"),
+  expiration:get(r,"expiry","expiration","expiration date"),
+  premium:get(r,"premium","estimated premium","premium estimated"),
+  volume:get(r,"volume","trade volume","size"),
+  open_interest:get(r,"oi","open interest","open_interest"),
+  volume_oi_ratio:get(r,"vol/oi","vol oi","volume/oi","volume oi"),
+  sentiment:get(r,"tags","sentiment","flags","fill"),
+  timestamp:get(r,"time","timestamp","date","datetime"),
+  _raw:r
+ })).filter(x=>x.symbol);
+}
+function smLoadOptionsCsv(file){
+ const status=document.getElementById("ofStatus"),rows=document.getElementById("ofRows");
+ const reader=new FileReader();
+ reader.onload=()=>{
+  try{
+   const a=ofParseCsv(reader.result);
+   if(!a.length)throw new Error("No se reconoció la columna Ticker/Symbol en el CSV.");
+   const esc=smEscape;
+   rows.innerHTML=a.map(x=>'<tr><td><b>'+esc(x.symbol)+'</b></td><td>'+esc(x.contract||"—")+'</td><td>'+esc(x.type||"—")+'</td><td>'+esc(x.expiration||"—")+'</td><td>'+esc(x.premium?smMoney(Number(String(x.premium).replace(/[$,]/g,""))):"—")+'</td><td>'+esc(x.volume||"—")+'</td><td>'+esc(x.open_interest||"—")+'</td><td>'+esc(x.volume_oi_ratio||"—")+'</td><td>'+esc(x.sentiment||"—")+'</td><td>'+esc(x.timestamp||"—")+'</td></tr>').join("");
+   status.textContent="CSV cargado: "+a.length+" operaciones · fuente Xynth · exportación manual, no conexión automática.";
+  }catch(e){status.textContent="No se pudo leer el CSV: "+e.message;}
+ };
+ reader.onerror=()=>{status.textContent="Error al leer el archivo CSV."};
+ reader.readAsText(file);
+}
+document.addEventListener("DOMContentLoaded",()=>{
+ const input=document.getElementById("ofCsvFile");
+ if(input)input.addEventListener("change",()=>{if(input.files&&input.files[0])smLoadOptionsCsv(input.files[0]);});
+});
+
