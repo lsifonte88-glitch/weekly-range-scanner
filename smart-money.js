@@ -135,7 +135,7 @@ function ofParseCsv(text){
  const headers=split(first,delimiter).map(norm);
  const rows=lines.slice(1).map(x=>split(x,delimiter));
  const aliases={
-  symbol:["ticker","symbol","underlying","underlying symbol"],
+  symbol:["ticker","symbol","underlying","underlying symbol","root"],
   contract:["contract","option symbol","option symbol ticker","option contract","option contract ticker"],
   type:["call/put","put call","option type","right","type","tipo"],
   strike:["strike","strike price","precio strike"],
@@ -159,7 +159,7 @@ function ofParseCsv(text){
   cross:["is cross","cross"],
   floor:["is floor","floor"],
   unusual:["unusual","is unusual"],
-  flags:["flags","tags","trade codes","trade code","tags "],
+  fillpos:["fill pos","fill position","fill pos %"],\n  opening:["possible opening","possible opening ","posible apertura","opening"],\n  flags:["flags","tags","trade codes","trade code","tags "],
   exchange:["exchange","exch"]
  };
  const idx={};for(const [key,names] of Object.entries(aliases))idx[key]=headers.findIndex(h=>names.includes(h));
@@ -167,7 +167,7 @@ function ofParseCsv(text){
  const number=v=>{let z=String(v??"").trim().replace(/[$,%\s]/g,"").replace(/,/g,"");if(!z||z==="—"||z==="-"||z.toLowerCase()==="null")return null;const m=z.match(/^(-?\d*\.?\d+)\s*([KMB])?$/i);if(!m)return null;const mult=({K:1e3,M:1e6,B:1e9})[(m[2]||"").toUpperCase()]||1;return Number(m[1])*mult;};
  const truth=v=>/^(true|1|yes|y|sí|si)$/i.test(String(v||"").trim());
  return rows.map(r=>{
-  const symbol=get(r,"symbol").toUpperCase(),contract=get(r,"contract"),rawType=get(r,"type").toUpperCase();
+  const symbol=(get(r,"symbol")||inferredSymbol).toUpperCase(),rawContract=get(r,"contract"),rawType=get(r,"type").toUpperCase();\n  const strike=number(get(r,"strike")),expiration=get(r,"expiration");\n  const contract=rawContract||(symbol&&rawType&&strike!=null?[symbol,rawType,strike,expiration].filter(Boolean).join(" "):"");
   const type=/CALL|LLAMAR|\bC\b/.test(rawType)?"CALL":/PUT|PONER|\bP\b/.test(rawType)?"PUT":"—";
   const side=get(r,"side").toLowerCase();
   const size=number(get(r,"size")),volume=number(get(r,"volume")),oi=number(get(r,"oi")),ratio=number(get(r,"ratio"));
@@ -194,7 +194,7 @@ function ofParseCsv(text){
   const dte=number(get(r,"dte"));
   score=Math.min(100,score);
   const isIndex=/^(SPXW?|SPX|XSP|NDX|RUT|VIX|OEX|DJX)$/.test(symbol);
-  return {symbol,contract,type,strike:number(get(r,"strike")),expiration:get(r,"expiration"),dte,stock:number(get(r,"stock")),premium,size,volume,open_interest:oi,volume_oi_ratio:ratio,side,fill,bid,ask,spread:number(get(r,"spread")),timestamp:get(r,"timestamp"),isSweep,isCross,isFloor,isUnusual,tags:get(r,"flags"),exchange:get(r,"exchange"),score,reasons,isIndex,delimiter};
+  return {symbol,contract,type,strike,expiration,dte,stock:number(get(r,"stock"))??number(inferredSymbolHeader?get(r,"stock"):""),premium,size,volume,open_interest:oi,volume_oi_ratio:ratio,side,fill,bid,ask,spread:number(get(r,"spread")),timestamp:get(r,"timestamp"),isSweep,isCross,isFloor,isUnusual,tags:get(r,"flags"),exchange:get(r,"exchange"),score,reasons,isIndex,delimiter};
  }).filter(x=>x.symbol);
 }
 function smLoadOptionsCsv(file){
