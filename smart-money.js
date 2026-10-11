@@ -131,56 +131,70 @@ function ofParseCsv(text){
  if(lines.length<2)throw new Error("El archivo no contiene operaciones.");
  function split(line,delimiter){let out=[],cur="",q=false;for(let i=0;i<line.length;i++){const c=line[i];if(c==='"'&&q&&line[i+1]==='"'){cur+='"';i++;}else if(c==='"')q=!q;else if(c===delimiter&&!q){out.push(cur.trim());cur="";}else cur+=c;}out.push(cur.trim());return out;}
  const first=lines[0],comma=(first.match(/,/g)||[]).length,pipe=(first.match(/\|/g)||[]).length,delimiter=pipe>comma?"|":",";
- const headers=split(first,delimiter).map(x=>x.trim().toLowerCase().replace(/[\u00a0]/g," ").replace(/[ _-]+/g," ").replace(/[–—]/g,"-").replace(/%/g," %").replace(/\s+/g," ").trim());
+ const norm=s=>String(s||"").trim().toLowerCase().replace(/^\uFEFF/,"").replace(/[\u00a0]/g," ").replace(/[%]/g," %").replace(/[_-]+/g," ").replace(/\s+/g," ").trim();
+ const headers=split(first,delimiter).map(norm);
  const rows=lines.slice(1).map(x=>split(x,delimiter));
  const aliases={
   symbol:["ticker","symbol","underlying","underlying symbol"],
-  contract:["contract","option symbol","option_symbol","option contract"],
-  type:["call/put","put call","option type","right","type"],
-  expiration:["expiry","expiration","expiration date","exp"],
+  contract:["contract","option symbol","option symbol ticker","option contract","option contract ticker"],
+  type:["call/put","put call","option type","right","type","tipo"],
+  strike:["strike","strike price","precio strike"],
+  expiration:["expiry","expiration","expiration date","exp","venc","vencimiento"],
   dte:["dte","days to expiry","days to expiration"],
   stock:["stock","underlying price","spot"],
   premium:["premium","estimated premium","premium estimated","premium $","prima$","total premium"],
-  volume:["volume","trade volume","size","contracts","cont"],
-  oi:["oi","open interest","open_interest","open interest "],
-  ratio:["vol/oi","vol / oi","vol oi","volume/oi","volume oi","volume / oi"],
+  size:["size","contracts","contract size","cont","cantidad"],
+  volume:["volume","trade volume","total volume"],
+  oi:["oi","open interest","open interest "],
+  ratio:["vol/oi","vol / oi","vol oi","volume/oi","volume oi","volume / oi","vol oi ratio"],
   side:["side","lado","trade side"],
-  fill:["fill","trade price","execution price","spot"],
-  bidask:["bid - ask","bid-ask","bid ask","chain bid/ask","bid/ask"],
-  fillSpread:["fill vs spread","fill position","fill_pos"],
-  flags:["flags","tags","unusual","sweep","trade_code"],
+  fill:["fill","price","trade price","execution price","precio"],
+  bid:["bid","bid price"],
+  ask:["ask","ask price"],
+  spread:["spread"],
+  askpct:["ask perc","ask percentage","ask %"],
+  bidpct:["bid perc","bid percentage","bid %"],
   timestamp:["time (et)","time","timestamp","date","datetime","hora"],
-  dte:["dte","days to expiry","days to expiration"]
+  sweep:["is sweep","sweep"],
+  cross:["is cross","cross"],
+  floor:["is floor","floor"],
+  unusual:["unusual","is unusual"],
+  flags:["flags","tags","trade codes","trade code","tags "],
+  exchange:["exchange","exch"]
  };
  const idx={};for(const [key,names] of Object.entries(aliases))idx[key]=headers.findIndex(h=>names.includes(h));
  const get=(r,key)=>idx[key]<0?"":String(r[idx[key]]??"").trim();
- const number=(v)=>{let z=String(v??"").trim().replace(/[$,%\s]/g,"").replace(/,/g,"");if(!z)return null;const m=z.match(/^(-?\d*\.?\d+)\s*([KMB])?$/i);if(!m)return null;const mult=({K:1e3,M:1e6,B:1e9})[(m[2]||"").toUpperCase()]||1;return Number(m[1])*mult;};
- const parseBidAsk=(v)=>{const m=String(v||"").match(/(\d*\.?\d+)\s*[-–]\s*(\d*\.?\d+)/);return m?[Number(m[1]),Number(m[2])]:null;};
+ const number=v=>{let z=String(v??"").trim().replace(/[$,%\s]/g,"").replace(/,/g,"");if(!z||z==="—"||z==="-"||z.toLowerCase()==="null")return null;const m=z.match(/^(-?\d*\.?\d+)\s*([KMB])?$/i);if(!m)return null;const mult=({K:1e3,M:1e6,B:1e9})[(m[2]||"").toUpperCase()]||1;return Number(m[1])*mult;};
+ const truth=v=>/^(true|1|yes|y|sí|si)$/i.test(String(v||"").trim());
  return rows.map(r=>{
-  const rawType=(get(r,"type")+" "+get(r,"contract")).toUpperCase();
-  const type=/\bCALL\b|\bC\b/.test(rawType)?"CALL":/\bPUT\b|\bP\b/.test(rawType)?"PUT":"—";
-  const side=get(r,"side").toUpperCase();
-  const volume=number(get(r,"volume")),oi=number(get(r,"oi")),ratio=number(get(r,"ratio"));
-  const size=volume,fill=number(get(r,"fill")),ba=parseBidAsk(get(r,"bidask"));
-  let premium=number(get(r,"premium"));
-  if(premium==null&&fill!=null&&size!=null)premium=fill*size*100;
-  const flags=(get(r,"flags")+" "+get(r,"fillSpread")).toUpperCase();
+  const symbol=get(r,"symbol").toUpperCase(),contract=get(r,"contract"),rawType=get(r,"type").toUpperCase();
+  const type=/CALL|LLAMAR|\bC\b/.test(rawType)?"CALL":/PUT|PONER|\bP\b/.test(rawType)?"PUT":"—";
+  const side=get(r,"side").toLowerCase();
+  const size=number(get(r,"size")),volume=number(get(r,"volume")),oi=number(get(r,"oi")),ratio=number(get(r,"ratio"));
+  const fill=number(get(r,"fill")),bid=number(get(r,"bid")),ask=number(get(r,"ask"));
+  let premium=number(get(r,"premium"));if(premium==null&&fill!=null&&size!=null)premium=fill*size*100;
+  const flags=(get(r,"flags")+" "+get(r,"exchange")).toUpperCase();
+  const isSweep=truth(get(r,"sweep"))||/\bSWEEP\b/.test(flags),isCross=truth(get(r,"cross"))||/\bCROSS\b/.test(flags),isFloor=truth(get(r,"floor"))||/\bFLOOR\b/.test(flags),isUnusual=truth(get(r,"unusual"))||/\bUNUSUAL\b/.test(flags);
+  const width=bid!=null&&ask!=null?ask-bid:null,position=width>0&&fill!=null?(fill-bid)/width:null;
   let score=0,reasons=[];
-  if(premium>=1000000){score+=35;reasons.push("prima ≥ $1M");}
-  else if(premium>=250000){score+=25;reasons.push("prima ≥ $250K");}
-  else if(premium>=100000){score+=15;reasons.push("prima ≥ $100K");}
-  else if(premium>=50000){score+=8;reasons.push("prima ≥ $50K");}
-  if(ratio>=5){score+=25;reasons.push("Vol/OI ≥ 5");}
-  else if(ratio>=2){score+=18;reasons.push("Vol/OI ≥ 2");}
-  else if(ratio>=1){score+=10;reasons.push("Vol/OI ≥ 1");}
-  const fp=number(get(r,"fillSpread"));
-  if(/SWEEP/.test(flags)){score+=12;reasons.push("sweep");}
-  if(/BLOCK|FLOOR/.test(flags)){score+=8;reasons.push("block/floor");}
-  if(/ASK/.test(flags)||(/BUY/.test(side)&&ba&&fill!=null&&ba[1]>0&&Math.abs(fill-ba[1])/(ba[1]-ba[0]||1)<0.2)){score+=10;reasons.push("ejecución cerca del ask");}
-  if(/BID/.test(flags)||(/SELL/.test(side)&&ba&&fill!=null&&ba[1]>ba[0]&&Math.abs(fill-ba[0])/(ba[1]-ba[0])<0.2)){score+=5;reasons.push("ejecución cerca del bid");}
-  const dte=number(get(r,"dte"));if(dte!=null&&dte>=90){score+=5;reasons.push("DTE ≥ 90");}
+  if(premium>=1000000){score+=30;reasons.push("prima ≥ $1M");}
+  else if(premium>=250000){score+=24;reasons.push("prima ≥ $250K");}
+  else if(premium>=100000){score+=18;reasons.push("prima ≥ $100K");}
+  else if(premium>=25000){score+=10;reasons.push("prima ≥ $25K");}
+  if(ratio>=10){score+=25;reasons.push("Vol/OI ≥ 10");}
+  else if(ratio>=5){score+=20;reasons.push("Vol/OI ≥ 5");}
+  else if(ratio>=2){score+=12;reasons.push("Vol/OI ≥ 2");}
+  else if(ratio>=1){score+=6;reasons.push("Vol/OI ≥ 1");}
+  if(isUnusual){score+=15;reasons.push("marcada unusual por Xynth");}
+  if(isSweep){score+=10;reasons.push("sweep");}
+  if(isFloor){score+=8;reasons.push("floor");}
+  if(isCross){score+=4;reasons.push("cross");}
+  if(position!=null&&position>=0.8){score+=10;reasons.push("ejecución cerca del ask");}
+  else if(position!=null&&position<=0.2){score+=4;reasons.push("ejecución cerca del bid");}
+  const dte=number(get(r,"dte"));
   score=Math.min(100,score);
-  return {symbol:get(r,"symbol"),contract:get(r,"contract"),type,expiration:get(r,"expiration"),dte,stock:number(get(r,"stock")),premium,volume,open_interest:oi,volume_oi_ratio:ratio,side,fill,bidask:get(r,"bidask"),flags:get(r,"flags")||get(r,"fillSpread"),timestamp:get(r,"timestamp"),score,reasons,delimiter};
+  const isIndex=/^(SPXW?|SPX|XSP|NDX|RUT|VIX|OEX|DJX)$/.test(symbol);
+  return {symbol,contract,type,strike:number(get(r,"strike")),expiration:get(r,"expiration"),dte,stock:number(get(r,"stock")),premium,size,volume,open_interest:oi,volume_oi_ratio:ratio,side,fill,bid,ask,spread:number(get(r,"spread")),timestamp:get(r,"timestamp"),isSweep,isCross,isFloor,isUnusual,tags:get(r,"flags"),exchange:get(r,"exchange"),score,reasons,isIndex,delimiter};
  }).filter(x=>x.symbol);
 }
 function smLoadOptionsCsv(file){
