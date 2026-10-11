@@ -15,6 +15,7 @@ function smBadge(value) {
 function smMoney(value){const n=Number(value)||0;if(n>=1e9)return "$"+(n/1e9).toFixed(2)+"B";if(n>=1e6)return "$"+(n/1e6).toFixed(2)+"M";if(n>=1e3)return "$"+(n/1e3).toFixed(1)+"K";return "$"+n.toFixed(0)}
 
 let smImportedOptionsBySymbol = new Map();
+let smLastRadarData = null;
 function smBuildOptionsMap(trades){
  const groups=new Map();
  for(const t of trades){
@@ -61,6 +62,7 @@ function smRenderSummary(data){
   box.innerHTML=card("TOP OPORTUNIDAD · INFLOW",inflow,"green")+card("TOP OPORTUNIDAD · OUTFLOW",outflow,"red")+card("ACTIVIDAD ANORMAL",unusual,"yellow");
 }
 function smRenderRows(data){
+  smLastRadarData=data;
   smRenderSummary(data);
   const rows=document.getElementById("smRows"); if(!rows)return;
   if(!Array.isArray(data)||!data.length){rows.innerHTML='<tr><td colspan="16" class="loading">Sin datos.</td></tr>';return;}
@@ -239,6 +241,7 @@ function smLoadOptionsCsv(file){
    const a=ofParseCsv(reader.result);
    if(!a.length)throw new Error("No se reconoció la columna Ticker/Symbol. Exporta el CSV original de Xynth.");
    smImportedOptionsBySymbol=smBuildOptionsMap(a);
+   if(Array.isArray(smLastRadarData))smRenderRows(smLastRadarData);
    const esc=smEscape;
    const ranked=[...a].sort((x,y)=>y.score-x.score);
    rows.innerHTML=ranked.map(x=>{
