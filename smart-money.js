@@ -146,7 +146,7 @@ function ofParseCsv(text){
   stock:["stock","underlying price","spot"],
   premium:["premium","estimated premium","premium estimated","premium $","prima$","total premium"],
   size:["size","contracts","contract size","cont","cantidad"],
-  volume:["volume","trade volume","total volume"],
+  volume:["volume","vol","trade volume","total volume"],
   oi:["oi","open interest","open interest "],
   ratio:["vol/oi","vol / oi","vol oi","volume/oi","volume oi","volume / oi","vol oi ratio"],
   side:["side","lado","trade side"],
@@ -176,7 +176,8 @@ function ofParseCsv(text){
   const contract=rawContract||(symbol&&rawType&&strike!=null?[symbol,rawType,strike,expiration].filter(Boolean).join(" "):"");
   const type=/CALL|LLAMAR|\bC\b/.test(rawType)?"CALL":/PUT|PONER|\bP\b/.test(rawType)?"PUT":"—";
   const side=get(r,"side").toLowerCase();
-  const size=number(get(r,"size")),volume=number(get(r,"volume")),oi=number(get(r,"oi")),ratio=number(get(r,"ratio"));
+  const size=number(get(r,"size")),volume=number(get(r,"volume")),oi=number(get(r,"oi"));
+  const ratioRaw=number(get(r,"ratio")),ratio=ratioRaw!=null?ratioRaw:(volume!=null&&oi>0?volume/oi:null);
   const fill=number(get(r,"fill")),bid=number(get(r,"bid")),ask=number(get(r,"ask"));
   let premium=number(get(r,"premium"));if(premium==null&&fill!=null&&size!=null)premium=fill*size*100;
   const flags=(get(r,"flags")+" "+get(r,"exchange")).toUpperCase();
