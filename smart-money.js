@@ -14,6 +14,33 @@ function smBadge(value) {
 }
 function smMoney(value){const n=Number(value)||0;if(n>=1e9)return "$"+(n/1e9).toFixed(2)+"B";if(n>=1e6)return "$"+(n/1e6).toFixed(2)+"M";if(n>=1e3)return "$"+(n/1e3).toFixed(1)+"K";return "$"+n.toFixed(0)}
 
+let smImportedOptionsBySymbol = new Map();
+function smBuildOptionsMap(trades){
+ const groups=new Map();
+ for(const t of trades){
+  const sym=String(t.symbol||"").toUpperCase().trim();
+  if(!sym||t.isIndex) continue;
+  if(!groups.has(sym)) groups.set(sym,[]);
+  groups.get(sym).push(t);
+ }
+ const result=new Map();
+ for(const [sym,arr] of groups){
+  const top=[...arr].sort((a,b)=>(b.score||0)-(a.score||0)).slice(0,10);
+  let bull=0,bear=0,totalScore=0;
+  for(const t of top){
+   const side=String(t.side||"").toLowerCase(),type=String(t.type||"").toUpperCase();
+   const buy=/buy|buyer|ask|lift|compra/.test(side),sell=/sell|seller|bid|hit|venta/.test(side);
+   const premium=Number(t.premium)||0;
+   const weight=Math.max(1,Number(t.score)||0)*(premium>0?Math.min(3,1+Math.log10(1+premium/100000)):1);
+   totalScore+=Number(t.score)||0;
+   if(type==="CALL"){if(buy)bull+=weight;else if(sell)bear+=weight;}
+   if(type==="PUT"){if(buy)bear+=weight;else if(sell)bull+=weight;}
+  }
+  const sum=bull+bear,bias=sum?(bull-bear)/sum:0,avg=top.length?totalScore/top.length:0;
+  result.set(sym,{count:arr.length,score:Math.round(avg),bias,impact:Math.round(bias*Math.min(8,avg/10))});
+ }
+ return result;
+}
 function smRenderSummary(data){
   const host=document.getElementById("smRows")?.closest(".panel");
   if(!host)return;
@@ -38,8 +65,8 @@ function smRenderRows(data){
   const rows=document.getElementById("smRows"); if(!rows)return;
   if(!Array.isArray(data)||!data.length){rows.innerHTML='<tr><td colspan="16" class="loading">Sin datos.</td></tr>';return;}
   rows.innerHTML=data.map((x,i)=>{
-    const score=Number(x.score)||0, flow=x.flowDirection||"MIXED", mf=x.marketFlow||{}, insider=x.insider||{}, institutional=x.institutional||{}, congress=x.congress||{}, unusual=x.unusual||{}, etf=x.etf||{}, options=x.options||{}, conf=x.confluence||{}, confirmation=x.confirmation||{}, early=x.earlySmartMoney||{};
-    return `<tr><td><b>${i+1}</b></td><td><b>${smEscape(x.symbol)}</b></td><td><span class="score ${score>=70?'green':score<=30?'red':'yellow'}">${score}</span><br><span class="small">OPPORTUNITY</span></td><td><span class="score ${Number(confirmation.score||0)>=70?'green':Number(confirmation.score||0)>=50?'yellow':'red'}">${Number(confirmation.score||0)}</span><br><span class="small">${smEscape(confirmation.signal||"NO_CONFIRMATION")}</span></td><td>${smBadge(flow)}<br><span class="small">conf. ${smEscape(conf.confidence||"—")}</span></td><td>${smBadge(mf.signal||"UNAVAILABLE")}<br><span class="small">RVOL ${Number(mf.rvol||0).toFixed(2)}x · 5D ${Number(mf.priceChange5D||0).toFixed(1)}%</span></td><td>${smBadge(insider.signal)}<br><span class="small">${insider.count||0} · ${smMoney(insider.netValue||0)}</span></td><td>${smBadge(institutional.signal)}<br><span class="small">${institutional.filers||0} managers · LAGGED</span></td><td>${smBadge(congress.signal)}<br><span class="small">${congress.count||0} ops</span></td><td>${smBadge(unusual.signal)}<br><span class="small">RVOL ${Number(unusual.rvol||0).toFixed(2)}x</span></td><td>${smBadge(x.earlySmartMoney?.signal||"UNAVAILABLE")}<br><span class="small">score ${Number(x.earlySmartMoney?.score||0)} · ${smEscape(({UPTREND_ABOVE_EMA200:"ALCISTA > EMA200",ABOVE_EMA200:"SOBRE EMA200",RECOVERY_BELOW_EMA200:"RECUPERACIÓN < EMA200",BELOW_EMA200:"BAJO EMA200"})[x.earlySmartMoney?.trendState]||"TENDENCIA S/D")}</span></td><td>${smBadge(etf.signal)}</td><td>${smBadge(options.signal||"OFF")}<br><span class="small">C/P ${options.callPutRatio==null?'—':Number(options.callPutRatio).toFixed(2)+'x'}</span></td><td><span class="small">${smEscape((x.reasons||[]).join(" · "))}</span></td><td><span class="small">${smEscape((x.dataQuality||""))}</span></td><td><span class="small">${smEscape(x.asOf||"")}</span></td><td><button type="button" class="smDetailBtn" data-symbol="${smEscape(x.symbol)}">DETALLES</button></td></tr>`;
+    const imported=smImportedOptionsBySymbol.get(String(x.symbol||"").toUpperCase()), baseScore=Number(x.score)||0, score=Math.max(0,Math.min(100,baseScore+(imported?.impact||0))), flow=x.flowDirection||"MIXED", mf=x.marketFlow||{}, insider=x.insider||{}, institutional=x.institutional||{}, congress=x.congress||{}, unusual=x.unusual||{}, etf=x.etf||{}, options=x.options||{}, conf=x.confluence||{}, confirmation=x.confirmation||{}, early=x.earlySmartMoney||{};
+    return `<tr><td><b>${i+1}</b></td><td><b>${smEscape(x.symbol)}</b></td><td><span class="score ${score>=70?'green':score<=30?'red':'yellow'}">${score}</span><br><span class="small">OPPORTUNITY</span></td><td><span class="score ${Number(confirmation.score||0)>=70?'green':Number(confirmation.score||0)>=50?'yellow':'red'}">${Number(confirmation.score||0)}</span><br><span class="small">${smEscape(confirmation.signal||"NO_CONFIRMATION")}</span></td><td>${smBadge(flow)}<br><span class="small">conf. ${smEscape(conf.confidence||"—")}</span></td><td>${smBadge(mf.signal||"UNAVAILABLE")}<br><span class="small">RVOL ${Number(mf.rvol||0).toFixed(2)}x · 5D ${Number(mf.priceChange5D||0).toFixed(1)}%</span></td><td>${smBadge(insider.signal)}<br><span class="small">${insider.count||0} · ${smMoney(insider.netValue||0)}</span></td><td>${smBadge(institutional.signal)}<br><span class="small">${institutional.filers||0} managers · LAGGED</span></td><td>${smBadge(congress.signal)}<br><span class="small">${congress.count||0} ops</span></td><td>${smBadge(unusual.signal)}<br><span class="small">RVOL ${Number(unusual.rvol||0).toFixed(2)}x</span></td><td>${smBadge(x.earlySmartMoney?.signal||"UNAVAILABLE")}<br><span class="small">score ${Number(x.earlySmartMoney?.score||0)} · ${smEscape(({UPTREND_ABOVE_EMA200:"ALCISTA > EMA200",ABOVE_EMA200:"SOBRE EMA200",RECOVERY_BELOW_EMA200:"RECUPERACIÓN < EMA200",BELOW_EMA200:"BAJO EMA200"})[x.earlySmartMoney?.trendState]||"TENDENCIA S/D")}</span></td><td>${smBadge(etf.signal)}</td><td>${imported?`CSV Xynth · ${imported.score}/100<br><span class="small">${imported.count} ops · ${imported.bias>0.15?"sesgo CALL/alcista":imported.bias< -0.15?"sesgo PUT/bajista":"sesgo mixto/no claro"} · ajuste ${imported.impact>0?"+":""}${imported.impact}</span>`:`${smBadge(options.signal||"OFF")}<br><span class="small">C/P ${options.callPutRatio==null?"—":Number(options.callPutRatio).toFixed(2)+"x"}</span>`}</td><td><span class="small">${smEscape((x.reasons||[]).join(" · "))}${imported?" · CSV Xynth: "+imported.count+" ops; ajuste "+(imported.impact>0?"+":"")+imported.impact+" puntos (heurístico)":""}</span></td><td><span class="small">${smEscape((x.dataQuality||""))}</span></td><td><span class="small">${smEscape(x.asOf||"")}</span></td><td><button type="button" class="smDetailBtn" data-symbol="${smEscape(x.symbol)}">DETALLES</button></td></tr>`;
   }).join("");
   document.querySelectorAll(".smDetailBtn").forEach(b=>b.addEventListener("click",()=>smDetails(b.dataset.symbol)));
 }
@@ -211,6 +238,7 @@ function smLoadOptionsCsv(file){
   try{
    const a=ofParseCsv(reader.result);
    if(!a.length)throw new Error("No se reconoció la columna Ticker/Symbol. Exporta el CSV original de Xynth.");
+   smImportedOptionsBySymbol=smBuildOptionsMap(a);
    const esc=smEscape;
    const ranked=[...a].sort((x,y)=>y.score-x.score);
    rows.innerHTML=ranked.map(x=>{
