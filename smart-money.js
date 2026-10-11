@@ -59,7 +59,7 @@ function smRenderSummary(data){
   const outflow=arr.filter(x=>String(x.flowDirection||"").toUpperCase()==="OUTFLOW").sort((a,b)=>(Number(b.score)||0)-(Number(a.score)||0)).slice(0,5);
   const unusual=arr.filter(x=>String(x.flowDirection||"").toUpperCase()==="ABNORMAL_ACTIVITY"||String(x.unusual?.signal||"").toUpperCase().includes("UNUSUAL")).sort((a,b)=>(Number(b.unusual?.score)||0)-(Number(a.unusual?.score)||0)).slice(0,5);
   const card=(title,list,cls)=>'<div class="badge" style="flex:1;min-width:280px"><b>'+title+'</b><div class="small" style="margin-top:6px">'+(list.length?list.map(x=>'<span class="'+cls+'"><b>'+smEscape(x.symbol)+'</b> '+(Number(x.score)||0)+'</span>').join(" · "):"Sin señales")+'</div></div>';
-  box.innerHTML=card("TOP OPORTUNIDAD · INFLOW",inflow,"green")+card("TOP OPORTUNIDAD · OUTFLOW",outflow,"red")+card("ACTIVIDAD ANORMAL",unusual,"yellow");
+  box.innerHTML=card("CANDIDATOS · INFLOW (SIN CONFIRMAR)",inflow,"green")+card("CANDIDATOS · OUTFLOW (SIN CONFIRMAR)",outflow,"red")+card("ACTIVIDAD ANORMAL · REVISAR",unusual,"yellow");
 }
 function smRenderRows(data){
   smLastRadarData=data;
