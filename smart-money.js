@@ -194,7 +194,7 @@ function ofParseCsv(text){
   const dte=number(get(r,"dte"));
   score=Math.min(100,score);
   const isIndex=/^(SPXW?|SPX|XSP|NDX|RUT|VIX|OEX|DJX)$/.test(symbol);
-  return {symbol,contract,type,strike,expiration,dte,stock:number(get(r,"stock"))??number(inferredSymbolHeader?get(r,"stock"):""),premium,size,volume,open_interest:oi,volume_oi_ratio:ratio,side,fill,bid,ask,spread:number(get(r,"spread")),timestamp:get(r,"timestamp"),isSweep,isCross,isFloor,isUnusual,tags:get(r,"flags"),exchange:get(r,"exchange"),score,reasons,isIndex,delimiter};
+  return {symbol,contract,type,strike,expiration,dte,stock:number(get(r,"stock"))??(inferredSymbolHeader?number(r[headers.indexOf(inferredSymbolHeader)]):null),premium,size,volume,open_interest:oi,volume_oi_ratio:ratio,side,fill,bid,ask,spread:number(get(r,"spread")),timestamp:get(r,"timestamp"),isSweep,isCross,isFloor,isUnusual,tags:get(r,"flags"),exchange:get(r,"exchange"),score,reasons,isIndex,delimiter};
  }).filter(x=>x.symbol);
 }
 function smLoadOptionsCsv(file){
