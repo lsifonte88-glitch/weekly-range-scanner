@@ -125,26 +125,63 @@ window.smDetails=smDetails;
 
 
 function ofParseCsv(text){
- const lines=String(text||"").replace(/^\\uFEFF/,"").split(/\\r?\\n/).filter(x=>x.trim());
- if(lines.length<2)throw new Error("El CSV no contiene filas.");
- function split(line){let out=[],cur="",q=false;for(let i=0;i<line.length;i++){const c=line[i];if(c==='"'&&q&&line[i+1]==='"'){cur+='"';i++;}else if(c==='"')q=!q;else if(c===","&&!q){out.push(cur);cur="";}else cur+=c;}out.push(cur);return out;}
- const headers=split(lines[0]).map(x=>x.trim().toLowerCase().replace(/[ _-]+/g," "));
- const rows=lines.slice(1).map(split);
- const idx=(...names)=>headers.findIndex(h=>names.includes(h));
- const get=(r,...names)=>{const i=idx(...names);return i<0?"":(r[i]||"").trim()};
- return rows.map(r=>({
-  symbol:get(r,"ticker","symbol","underlying"),
-  contract:get(r,"contract","option symbol","option_symbol"),
-  type:get(r,"side","call/put","put call","type","right"),
-  expiration:get(r,"expiry","expiration","expiration date"),
-  premium:get(r,"premium","estimated premium","premium estimated"),
-  volume:get(r,"volume","trade volume","size"),
-  open_interest:get(r,"oi","open interest","open_interest"),
-  volume_oi_ratio:get(r,"vol/oi","vol oi","volume/oi","volume oi"),
-  sentiment:get(r,"tags","sentiment","flags","fill"),
-  timestamp:get(r,"time","timestamp","date","datetime"),
-  _raw:r
- })).filter(x=>x.symbol);
+ const raw=String(text||"").replace(/^\uFEFF/,"").trim();
+ if(!raw)throw new Error("El archivo está vacío.");
+ const lines=raw.split(/\r?\n/).filter(x=>x.trim());
+ if(lines.length<2)throw new Error("El archivo no contiene operaciones.");
+ function split(line,delimiter){let out=[],cur="",q=false;for(let i=0;i<line.length;i++){const c=line[i];if(c==='"'&&q&&line[i+1]==='"'){cur+='"';i++;}else if(c==='"')q=!q;else if(c===delimiter&&!q){out.push(cur.trim());cur="";}else cur+=c;}out.push(cur.trim());return out;}
+ const first=lines[0],comma=(first.match(/,/g)||[]).length,pipe=(first.match(/\|/g)||[]).length,delimiter=pipe>comma?"|":",";
+ const headers=split(first,delimiter).map(x=>x.trim().toLowerCase().replace(/[\u00a0]/g," ").replace(/[ _-]+/g," ").replace(/[–—]/g,"-").replace(/%/g," %").replace(/\s+/g," ").trim());
+ const rows=lines.slice(1).map(x=>split(x,delimiter));
+ const aliases={
+  symbol:["ticker","symbol","underlying","underlying symbol"],
+  contract:["contract","option symbol","option_symbol","option contract"],
+  type:["call/put","put call","option type","right","type"],
+  expiration:["expiry","expiration","expiration date","exp"],
+  dte:["dte","days to expiry","days to expiration"],
+  stock:["stock","underlying price","spot"],
+  premium:["premium","estimated premium","premium estimated","premium $","prima$","total premium"],
+  volume:["volume","trade volume","size","contracts","cont"],
+  oi:["oi","open interest","open_interest","open interest "],
+  ratio:["vol/oi","vol / oi","vol oi","volume/oi","volume oi","volume / oi"],
+  side:["side","lado","trade side"],
+  fill:["fill","trade price","execution price","spot"],
+  bidask:["bid - ask","bid-ask","bid ask","chain bid/ask","bid/ask"],
+  fillSpread:["fill vs spread","fill position","fill_pos"],
+  flags:["flags","tags","unusual","sweep","trade_code"],
+  timestamp:["time (et)","time","timestamp","date","datetime","hora"],
+  dte:["dte","days to expiry","days to expiration"]
+ };
+ const idx={};for(const [key,names] of Object.entries(aliases))idx[key]=headers.findIndex(h=>names.includes(h));
+ const get=(r,key)=>idx[key]<0?"":String(r[idx[key]]??"").trim();
+ const number=(v)=>{let z=String(v??"").trim().replace(/[$,%\s]/g,"").replace(/,/g,"");if(!z)return null;const m=z.match(/^(-?\d*\.?\d+)\s*([KMB])?$/i);if(!m)return null;const mult=({K:1e3,M:1e6,B:1e9})[(m[2]||"").toUpperCase()]||1;return Number(m[1])*mult;};
+ const parseBidAsk=(v)=>{const m=String(v||"").match(/(\d*\.?\d+)\s*[-–]\s*(\d*\.?\d+)/);return m?[Number(m[1]),Number(m[2])]:null;};
+ return rows.map(r=>{
+  const rawType=(get(r,"type")+" "+get(r,"contract")).toUpperCase();
+  const type=/\bCALL\b|\bC\b/.test(rawType)?"CALL":/\bPUT\b|\bP\b/.test(rawType)?"PUT":"—";
+  const side=get(r,"side").toUpperCase();
+  const volume=number(get(r,"volume")),oi=number(get(r,"oi")),ratio=number(get(r,"ratio"));
+  const size=volume,fill=number(get(r,"fill")),ba=parseBidAsk(get(r,"bidask"));
+  let premium=number(get(r,"premium"));
+  if(premium==null&&fill!=null&&size!=null)premium=fill*size*100;
+  const flags=(get(r,"flags")+" "+get(r,"fillSpread")).toUpperCase();
+  let score=0,reasons=[];
+  if(premium>=1000000){score+=35;reasons.push("prima ≥ $1M");}
+  else if(premium>=250000){score+=25;reasons.push("prima ≥ $250K");}
+  else if(premium>=100000){score+=15;reasons.push("prima ≥ $100K");}
+  else if(premium>=50000){score+=8;reasons.push("prima ≥ $50K");}
+  if(ratio>=5){score+=25;reasons.push("Vol/OI ≥ 5");}
+  else if(ratio>=2){score+=18;reasons.push("Vol/OI ≥ 2");}
+  else if(ratio>=1){score+=10;reasons.push("Vol/OI ≥ 1");}
+  const fp=number(get(r,"fillSpread"));
+  if(/SWEEP/.test(flags)){score+=12;reasons.push("sweep");}
+  if(/BLOCK|FLOOR/.test(flags)){score+=8;reasons.push("block/floor");}
+  if(/ASK/.test(flags)||(/BUY/.test(side)&&ba&&fill!=null&&ba[1]>0&&Math.abs(fill-ba[1])/(ba[1]-ba[0]||1)<0.2)){score+=10;reasons.push("ejecución cerca del ask");}
+  if(/BID/.test(flags)||(/SELL/.test(side)&&ba&&fill!=null&&ba[1]>ba[0]&&Math.abs(fill-ba[0])/(ba[1]-ba[0])<0.2)){score+=5;reasons.push("ejecución cerca del bid");}
+  const dte=number(get(r,"dte"));if(dte!=null&&dte>=90){score+=5;reasons.push("DTE ≥ 90");}
+  score=Math.min(100,score);
+  return {symbol:get(r,"symbol"),contract:get(r,"contract"),type,expiration:get(r,"expiration"),dte,stock:number(get(r,"stock")),premium,volume,open_interest:oi,volume_oi_ratio:ratio,side,fill,bidask:get(r,"bidask"),flags:get(r,"flags")||get(r,"fillSpread"),timestamp:get(r,"timestamp"),score,reasons,delimiter};
+ }).filter(x=>x.symbol);
 }
 function smLoadOptionsCsv(file){
  const status=document.getElementById("ofStatus"),rows=document.getElementById("ofRows");
@@ -152,10 +189,16 @@ function smLoadOptionsCsv(file){
  reader.onload=()=>{
   try{
    const a=ofParseCsv(reader.result);
-   if(!a.length)throw new Error("No se reconoció la columna Ticker/Symbol en el CSV.");
+   if(!a.length)throw new Error("No se reconoció la columna Ticker/Symbol. Exporta el CSV original de Xynth.");
    const esc=smEscape;
-   rows.innerHTML=a.map(x=>'<tr><td><b>'+esc(x.symbol)+'</b></td><td>'+esc(x.contract||"—")+'</td><td>'+esc(x.type||"—")+'</td><td>'+esc(x.expiration||"—")+'</td><td>'+esc(x.premium?smMoney(Number(String(x.premium).replace(/[$,]/g,""))):"—")+'</td><td>'+esc(x.volume||"—")+'</td><td>'+esc(x.open_interest||"—")+'</td><td>'+esc(x.volume_oi_ratio||"—")+'</td><td>'+esc(x.sentiment||"—")+'</td><td>'+esc(x.timestamp||"—")+'</td></tr>').join("");
-   status.textContent="CSV cargado: "+a.length+" operaciones · fuente Xynth · exportación manual, no conexión automática.";
+   const ranked=[...a].sort((x,y)=>y.score-x.score);
+   rows.innerHTML=ranked.map(x=>{
+    const signal=x.score>=65?"ACTIVIDAD MUY INUSUAL":x.score>=40?"REVISAR":x.score>=20?"MODERADA":"BAJA";
+    const dir=x.type==="CALL"&&/BUY/.test(x.side)?"CALL · compra ejecutada":x.type==="PUT"&&/BUY/.test(x.side)?"PUT · compra ejecutada":x.side||"SIN LADO";
+    return '<tr><td><b>'+esc(x.symbol)+'</b></td><td>'+esc(x.contract||"—")+'</td><td>'+esc(x.type)+'</td><td>'+esc(x.expiration||"—")+(x.dte!=null?' · '+esc(x.dte)+' DTE':"")+'</td><td>'+esc(x.premium==null?"—":smMoney(x.premium))+'</td><td>'+esc(x.volume??"—")+'</td><td>'+esc(x.open_interest??"—")+'</td><td>'+esc(x.volume_oi_ratio==null?"—":Number(x.volume_oi_ratio).toFixed(2)+"x")+'</td><td><b class="'+(x.score>=65?"green":x.score>=40?"yellow":"")+'">'+esc(signal)+" · "+x.score+'/100</b><br><span class="small">'+esc(x.reasons.join(" · ")||"Sin criterios fuertes")+'</span></td><td>'+esc(x.timestamp||"—")+'</td></tr>';
+   }).join("");
+   const strong=ranked.filter(x=>x.score>=40).length,top=ranked[0];
+   status.textContent="CSV analizado: "+a.length+" operaciones · delimitador "+(a[0].delimiter==="|"?"|":"coma")+" · "+strong+" candidatas a revisar (score ≥40). "+(top?"Mayor score: "+top.symbol+" "+top.score+"/100. ":"")+"Score heurístico experimental; no confirma entrada institucional ni dirección neta.";
   }catch(e){status.textContent="No se pudo leer el CSV: "+e.message;}
  };
  reader.onerror=()=>{status.textContent="Error al leer el archivo CSV."};
