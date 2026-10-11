@@ -208,8 +208,9 @@ function smLoadOptionsCsv(file){
    const ranked=[...a].sort((x,y)=>y.score-x.score);
    rows.innerHTML=ranked.map(x=>{
     const signal=x.score>=65?"ACTIVIDAD MUY INUSUAL":x.score>=40?"REVISAR":x.score>=20?"MODERADA":"BAJA";
-    const dir=x.type==="CALL"&&/BUY/.test(x.side)?"CALL · compra ejecutada":x.type==="PUT"&&/BUY/.test(x.side)?"PUT · compra ejecutada":x.side||"SIN LADO";
-    return '<tr><td><b>'+esc(x.symbol)+'</b></td><td>'+esc(x.contract||"—")+'</td><td>'+esc(x.type)+'</td><td>'+esc(x.expiration||"—")+(x.dte!=null?' · '+esc(x.dte)+' DTE':"")+'</td><td>'+esc(x.premium==null?"—":smMoney(x.premium))+'</td><td>'+esc(x.volume??"—")+'</td><td>'+esc(x.open_interest??"—")+'</td><td>'+esc(x.volume_oi_ratio==null?"—":Number(x.volume_oi_ratio).toFixed(2)+"x")+'</td><td><b class="'+(x.score>=65?"green":x.score>=40?"yellow":"")+'">'+esc(signal)+" · "+x.score+'/100</b><br><span class="small">'+esc(x.reasons.join(" · ")||"Sin criterios fuertes")+'</span></td><td>'+esc(x.timestamp||"—")+'</td></tr>';
+    const dir=x.side||"SIN LADO";
+    const label=x.isIndex?"ÍNDICE · NO ACCIÓN":signal;
+    return '<tr><td><b>'+esc(x.symbol)+'</b></td><td>'+esc(x.contract||"—")+'</td><td>'+esc(x.type)+'<br><span class="small">'+esc(dir)+'</span></td><td>'+esc(x.expiration||"—")+(x.dte!=null?' · '+esc(x.dte)+' DTE':"")+'</td><td>'+esc(x.premium==null?"—":smMoney(x.premium))+'</td><td>'+esc(x.size??"—")+' contratos<br><span class="small">Vol. mercado '+esc(x.volume??"—")+'</span></td><td>'+esc(x.open_interest??"—")+'</td><td>'+esc(x.volume_oi_ratio==null?"—":Number(x.volume_oi_ratio).toFixed(2)+"x")+'</td><td><b class="'+(x.isIndex?"yellow":x.score>=65?"green":x.score>=40?"yellow":"")+'">'+esc(label)+" · "+x.score+'/100</b><br><span class="small">'+esc(x.reasons.join(" · ")||"Sin criterios fuertes")+'</span></td><td>'+esc(x.timestamp||"—")+'</td></tr>';
    }).join("");
    const strong=ranked.filter(x=>x.score>=40).length,top=ranked[0];
    status.textContent="CSV analizado: "+a.length+" operaciones · delimitador "+(a[0].delimiter==="|"?"|":"coma")+" · "+strong+" candidatas a revisar (score ≥40). "+(top?"Mayor score: "+top.symbol+" "+top.score+"/100. ":"")+"Score heurístico experimental; no confirma entrada institucional ni dirección neta.";
