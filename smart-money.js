@@ -91,7 +91,7 @@ async function smLoad(){
     let dj;
     // Ruta crítica: /prefilter ya entrega ganadores, perdedores y mayor actividad
     // dinámicamente. No hacemos depender el radar de un proveedor lento.
-    status.textContent="Radar: detectando movimientos del mercado…";
+    status.textContent="Radar: combinando universo base con candidatos dinámicos…";
     const fallback=await smFetchJson(SM_API.replace("/smart-money","/prefilter")+"?_="+Date.now(),20000);
     dj=fallback.json;
     if(!fallback.ok||dj.status!=="ok")throw new Error(dj.message||"No se pudieron detectar movimientos del mercado.");
@@ -101,7 +101,10 @@ async function smLoad(){
     // como ERO antes de que aparecieran entre los primeros ganadores.
     // M y MUU se prueban siempre, aunque no aparezcan entre los movers principales.
     const importedSymbols=[...smImportedOptionsBySymbol.entries()].sort((a,b)=>(b[1].count||0)-(a[1].count||0)).map(([s])=>s).slice(0,6);
-    const scanList=[...new Set(["M","MUU",...importedSymbols,...scanCandidates.map(x=>String(x).toUpperCase().replace(/[^A-Z0-9.\\-]/g,"")).filter(Boolean)])].slice(0,16);
+    // Universo base fijo evita depender exclusivamente de ganadores del día.
+    const coreUniverse=["M","MUU","JD","WFC","DAL","GRAB","RKLB","SOFI","TSLA","INTC","NVDA","AMD","AVGO","GOOGL","AMZN","PLTR"];
+    const dynamicSymbols=scanCandidates.map(x=>String(x).toUpperCase().replace(/[^A-Z0-9.\\-]/g,"")).filter(Boolean);
+    const scanList=[...new Set(["M","MUU",...importedSymbols,...coreUniverse,...dynamicSymbols])].slice(0,24);
     if(!scanList.length)throw new Error("El mercado no devolvió candidatos.");
     let all=[];
     for(let i=0;i<scanList.length;i+=8){
@@ -131,7 +134,7 @@ async function smLoad(){
     const eligible=all.filter(x=>importedSet.has(String(x.symbol||"").toUpperCase()) ||
       (String(x.earlySmartMoney?.signal||"")!=="LATE_OR_WEAK" && Number(x.opportunityScore??x.score??0)>0));
     smRenderRows(eligible.slice(0,25));
-    status.textContent="Radar terminado · "+scanList.length+" candidatos analizados (M y MUU incluidos) · "+eligible.length+" filas visibles · CSV Xynth integrado cuando hay símbolos importados · ATR informativo";
+    status.textContent="Radar terminado · "+scanList.length+" candidatos analizados (universo base + dinámicos; M, MUU, JD y WFC incluidos) · "+eligible.length+" filas visibles · CSV Xynth integrado · ATR informativo; flujo institucional no confirmado en tiempo real";
   }catch(e){console.error("SMART MONEY ERROR:",e);status.textContent="ERROR: "+e.message;rows.innerHTML=`<tr><td colspan="16" class="red">${smEscape(e.message)}</td></tr>`}
 }
 
