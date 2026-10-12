@@ -1109,39 +1109,66 @@ async function smartMoneyBacktest(symbols,env){
   for(const [s,v] of loaded)all[s]=v;
   const benchmark=all.SPY||[];
   const results=[];
+  const portfolio={current:[],strict:[]};
+  const summarizeTrades=trades=>{
+    const out={};
+    for(const horizon of [5,10]){
+      const vals=trades.map(t=>t["return"+horizon+"D"]).filter(Number.isFinite);
+      const excess=trades.map(t=>Number.isFinite(t["return"+horizon+"D"])&&Number.isFinite(t["SPY"+horizon+"D"])?t["return"+horizon+"D"]-t["SPY"+horizon+"D"]:null).filter(Number.isFinite);
+      out[horizon+"D"]={n:vals.length,winRate:vals.length?Math.round(vals.filter(x=>x>0).length/vals.length*1000)/10:0,hit3Pct:vals.length?Math.round(vals.filter(x=>x>=3).length/vals.length*1000)/10:0,avgReturnPct:vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length*100)/100:null,avgExcessVsSPYPct:excess.length?Math.round(excess.reduce((a,b)=>a+b,0)/excess.length*100)/100:null};
+    }
+    return out;
+  };
   for(const symbol of symbols){
     const v=all[symbol]||[];
-    const trades=[];
-    let lastSignalIndex=-100;
+    const currentTrades=[],strictTrades=[];
+    let lastCurrent=-100,lastStrict=-100;
     if(v.length>=70){
       for(let i=50;i<v.length-10;i++){
-        if(i-lastSignalIndex<10)continue;
         const snapshot=earlySmartMoneyFromValues(v.slice(0,i),"backtest");
-        if(snapshot.signal!=="EARLY_ACCUMULATION"||Number(snapshot.score)<75)continue;
-        const entry=Number(v[i].open)||Number(v[i].close)||0;
-        if(entry<=0)continue;
-        const result={date:v[i].datetime||"",score:snapshot.score,rvol:snapshot.rvol};
-        for(const horizon of [5,10]){
-          const exitBar=v[Math.min(v.length-1,i+horizon-1)];
-          const exit=Number(exitBar?.close)||0;
-          result["return"+horizon+"D"]=exit>0?(exit/entry-1)*100:null;
-          const b0=benchmark.findIndex(x=>String(x.datetime)===String(v[i].datetime));
-          const bEntry=b0>=0?(Number(benchmark[b0].open)||Number(benchmark[b0].close)||0):0;
-          const bExit=b0>=0?(Number(benchmark[Math.min(benchmark.length-1,b0+horizon-1)]?.close)||0):0;
-          result["SPY"+horizon+"D"]=bEntry>0&&bExit>0?(bExit/bEntry-1)*100:null;
+        const signalDate=String(v[i-1]?.datetime||"");
+        const bSignalIndex=benchmark.findIndex(x=>String(x.datetime)===signalDate);
+        const stockRs=Number(snapshot.priceChange10D);
+        const spyRs=bSignalIndex>=10&&bSignalIndex>=0&&Number(benchmark[bSignalIndex-10]?.close)>0
+          ?(Number(benchmark[bSignalIndex]?.close)/Number(benchmark[bSignalIndex-10]?.close)-1)*100:NaN;
+        const relativeStrength10D=Number.isFinite(stockRs)&&Number.isFinite(spyRs)?stockRs-spyRs:NaN;
+        const currentEligible=snapshot.signal==="EARLY_ACCUMULATION"&&Number(snapshot.score)>=75;
+        // Filtro alternativo, definido antes de observar los retornos:
+        // presión compradora, rango contraído, cerca de resistencia sin extensión,
+        // momentum controlado y fuerza relativa no inferior al mercado por más de 1.5%.
+        const strictEligible=Number(snapshot.score)>=60
+          &&Number(snapshot.dollarImbalance)>=0.05
+          &&Number(snapshot.compressionRatio)<=1.10
+          &&Number(snapshot.breakoutDistance)>=0
+          &&Number(snapshot.breakoutDistance)<=10
+          &&Number(snapshot.priceChange5D)>=-2
+          &&Number(snapshot.priceChange5D)<=5
+          &&Number(snapshot.priceChange10D)<=8
+          &&(!Number.isFinite(relativeStrength10D)||relativeStrength10D>=-1.5);
+        for(const strategy of ["current","strict"]){
+          const eligible=strategy==="current"?currentEligible:strictEligible;
+          const last=strategy==="current"?lastCurrent:lastStrict;
+          if(!eligible||i-last<10)continue;
+          const entry=Number(v[i].open)||Number(v[i].close)||0;
+          if(entry<=0)continue;
+          const result={symbol,date:v[i].datetime||"",score:snapshot.score,rvol:snapshot.rvol,relativeStrength10D:Number.isFinite(relativeStrength10D)?Math.round(relativeStrength10D*100)/100:null};
+          for(const horizon of [5,10]){
+            const exitBar=v[Math.min(v.length-1,i+horizon-1)];
+            const exit=Number(exitBar?.close)||0;
+            result["return"+horizon+"D"]=exit>0?(exit/entry-1)*100:null;
+            const b0=benchmark.findIndex(x=>String(x.datetime)===String(v[i].datetime));
+            const bEntry=b0>=0?(Number(benchmark[b0].open)||Number(benchmark[b0].close)||0):0;
+            const bExit=b0>=0?(Number(benchmark[Math.min(benchmark.length-1,b0+horizon-1)]?.close)||0):0;
+            result["SPY"+horizon+"D"]=bEntry>0&&bExit>0?(bExit/bEntry-1)*100:null;
+          }
+          if(strategy==="current"){currentTrades.push(result);lastCurrent=i;portfolio.current.push(result);}
+          else {strictTrades.push(result);lastStrict=i;portfolio.strict.push(result);}
         }
-        trades.push(result);
-        lastSignalIndex=i;
       }
     }
-    const summarize=h=>{
-      const vals=trades.map(t=>t["return"+h+"D"]).filter(Number.isFinite);
-      const excess=trades.map(t=>Number.isFinite(t["return"+h+"D"])&&Number.isFinite(t["SPY"+h+"D"])?t["return"+h+"D"]-t["SPY"+h+"D"]:null).filter(Number.isFinite);
-      return {n:vals.length,winRate:vals.length?Math.round(vals.filter(x=>x>0).length/vals.length*1000)/10:0,hit3Pct:vals.length?Math.round(vals.filter(x=>x>=3).length/vals.length*1000)/10:0,avgReturnPct:vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length*100)/100:null,avgExcessVsSPYPct:excess.length?Math.round(excess.reduce((a,b)=>a+b,0)/excess.length*100)/100:null};
-    };
-    results.push({symbol,historyBars:v.length,signals:trades.length,"5D":summarize(5),"10D":summarize(10),trades:trades.slice(-20)});
+    results.push({symbol,historyBars:v.length,current:{signals:currentTrades.length,...summarizeTrades(currentTrades),trades:currentTrades.slice(-12)},strict:{signals:strictTrades.length,...summarizeTrades(strictTrades),trades:strictTrades.slice(-12)}});
   }
-  return results;
+  return {method:"Walk-forward sin lookahead: señal con datos hasta cierre previo, entrada a apertura siguiente, salidas a 5/10 sesiones; comparación contra SPY. Filtro strict fijado antes de evaluar retornos.",portfolio:{current:{signals:portfolio.current.length,...summarizeTrades(portfolio.current)},strict:{signals:portfolio.strict.length,...summarizeTrades(portfolio.strict)}},results};
 }
 async function smartMoneyFastData(symbol,env,secDirectory={},institutionalSnap=[]){
   // RADAR: el FAST debe detectar movimiento temprano usando precio/volumen.
