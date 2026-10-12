@@ -30,4 +30,4 @@ jobs:
           set -euo pipefail
           URL="https://weekly-range-api.changowalu.workers.dev/smart-money-backtest?symbols=NVDA%2CGOOGL%2CAMD%2CAVGO%2CPLTR%2CM%2CMUU%2CAMZN"
           RESPONSE="$(curl --retry 5 --retry-delay 3 --retry-connrefused -fsS "$URL")"
-          printf '%s' "$RESPONSE" | python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status") == "ok", d; assert "portfolio" in d and "results" in d, d.keys(); assert len(d["results"]) == 8, len(d["results"]); print("Smart Money backtest OK:", len(d["results"]), "symbols; portfolio summaries present")'
+          printf '%s' "$RESPONSE" | python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status") == "ok", d; assert "portfolio" in d and "results" in d, d.keys(); assert len(d["results"]) == 8, len(d["results"]); print("Smart Money backtest OK:", len(d["results"]), "symbols"); print(json.dumps(d["portfolio"], separators=(",",":")))'
