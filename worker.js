@@ -275,8 +275,8 @@ export default {
       if (url.pathname === "/smart-money-backtest") {
         const requested=cleanSymbols(url.searchParams.get("symbols") || "NVDA,GOOGL,AMD,AVGO,PLTR,M,MUU,AMZN");
         const symbols=requested.slice(0,8);
-        const results=await smartMoneyBacktest(symbols,env);
-        return json({status:"ok",mode:"WALK_FORWARD_NO_LOOKAHEAD",generatedAt:new Date().toISOString(),method:"Señal calculada solo con velas disponibles en la fecha de señal; entrada en la apertura siguiente; salidas a 5 y 10 sesiones; máximo una señal por símbolo cada 10 sesiones.",results},200,{"cache-control":"no-store"});
+        const backtest=await smartMoneyBacktest(symbols,env);
+        return json({status:"ok",mode:"WALK_FORWARD_NO_LOOKAHEAD",generatedAt:new Date().toISOString(),...backtest},200,{"cache-control":"no-store"});
       }
       if (url.pathname === "/smart-money") {
         const symbols = cleanSymbols(url.searchParams.get("symbols") || url.searchParams.get("symbol"));
