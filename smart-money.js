@@ -279,8 +279,22 @@ function smLoadOptionsCsv(file){
  reader.onerror=()=>{status.textContent="Error al leer el archivo CSV."};
  reader.readAsText(file);
 }
-document.addEventListener("DOMContentLoaded",()=>{
+function smBindControls(){
  const input=document.getElementById("ofCsvFile");
- if(input)input.addEventListener("change",()=>{if(input.files&&input.files[0])smLoadOptionsCsv(input.files[0]);});
-});
+ if(input&&!input.dataset.bound){input.dataset.bound="1";input.addEventListener("change",()=>{if(input.files&&input.files[0])smLoadOptionsCsv(input.files[0]);});}
+ const button=document.getElementById("smAnalyze");
+ if(button&&!button.dataset.bound){
+  button.dataset.bound="1";
+  button.addEventListener("click",async()=>{
+   if(button.disabled)return;
+   const original=button.textContent;
+   button.disabled=true;
+   button.textContent="ANALIZANDO…";
+   try{await smLoad();}
+   finally{button.disabled=false;button.textContent=original;}
+  });
+ }
+}
+if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",smBindControls,{once:true});
+else smBindControls();
 
