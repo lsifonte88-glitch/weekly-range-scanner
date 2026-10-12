@@ -1139,7 +1139,7 @@ async function smartMoneyBacktest(symbols,env){
       const excess=trades.map(t=>Number.isFinite(t["return"+h+"D"])&&Number.isFinite(t["SPY"+h+"D"])?t["return"+h+"D"]-t["SPY"+h+"D"]:null).filter(Number.isFinite);
       return {n:vals.length,winRate:vals.length?Math.round(vals.filter(x=>x>0).length/vals.length*1000)/10:0,hit3Pct:vals.length?Math.round(vals.filter(x=>x>=3).length/vals.length*1000)/10:0,avgReturnPct:vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length*100)/100:null,avgExcessVsSPYPct:excess.length?Math.round(excess.reduce((a,b)=>a+b,0)/excess.length*100)/100:null};
     };
-    results.push({symbol,historyBars:v.length,signals:trades.length,5D:summarize(5),10D:summarize(10),trades:trades.slice(-20)});
+    results.push({symbol,historyBars:v.length,signals:trades.length,"5D":summarize(5),"10D":summarize(10),trades:trades.slice(-20)});
   }
   return results;
 }
