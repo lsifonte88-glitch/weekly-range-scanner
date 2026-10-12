@@ -272,6 +272,12 @@ export default {
         if(!response.ok)return json({status:"provider_error",provider:"OptionsBell",httpStatus:response.status,data:parsed},502);
         return json({status:"ok",provider:"OptionsBell",retrievedAt:new Date().toISOString(),data:parsed},200,{"cache-control":"no-store"});
       }
+      if (url.pathname === "/smart-money-backtest") {
+        const requested=cleanSymbols(url.searchParams.get("symbols") || "NVDA,META,AMZN,GOOGL,AMD,AVGO,PLTR,M,MUU");
+        const symbols=requested.slice(0,8);
+        const results=await smartMoneyBacktest(symbols,env);
+        return json({status:"ok",mode:"WALK_FORWARD_NO_LOOKAHEAD",generatedAt:new Date().toISOString(),method:"Señal calculada solo con velas disponibles en la fecha de señal; entrada en la apertura siguiente; salidas a 5 y 10 sesiones; máximo una señal por símbolo cada 10 sesiones.",results},200,{"cache-control":"no-store"});
+      }
       if (url.pathname === "/smart-money") {
         const symbols = cleanSymbols(url.searchParams.get("symbols") || url.searchParams.get("symbol"));
         if (!symbols.length) return json({status:"error",message:"Falta symbol o symbols."},400);
@@ -1091,6 +1097,51 @@ function earlySmartMoneyFromValues(v, source) {
     compressionRatio,ema20,ema50,upDayRatio,source,reasons,
     note:"Modelo pre-breakout: aceleración de volumen + acumulación + compresión + proximidad a ruptura + tendencia, con penalización por movimiento ya extendido. ATR se informa en dólares y % del precio; no hay umbral fijo en dólares."
   };
+}
+async function smartMoneyBacktest(symbols,env){
+  const all={};
+  const loaded=await Promise.all([...new Set([...symbols,"SPY"])].map(async symbol=>{
+    try{
+      const h=await smartHistory(symbol,env,50);
+      return [symbol,Array.isArray(h.values)?h.values:[]];
+    }catch(_){return [symbol,[]];}
+  }));
+  for(const [s,v] of loaded)all[s]=v;
+  const benchmark=all.SPY||[];
+  const results=[];
+  for(const symbol of symbols){
+    const v=all[symbol]||[];
+    const trades=[];
+    let lastSignalIndex=-100;
+    if(v.length>=70){
+      for(let i=50;i<v.length-10;i++){
+        if(i-lastSignalIndex<10)continue;
+        const snapshot=earlySmartMoneyFromValues(v.slice(0,i),"backtest");
+        if(snapshot.signal!=="EARLY_ACCUMULATION"||Number(snapshot.score)<75)continue;
+        const entry=Number(v[i].open)||Number(v[i].close)||0;
+        if(entry<=0)continue;
+        const result={date:v[i].datetime||"",score:snapshot.score,rvol:snapshot.rvol};
+        for(const horizon of [5,10]){
+          const exitBar=v[Math.min(v.length-1,i+horizon-1)];
+          const exit=Number(exitBar?.close)||0;
+          result["return"+horizon+"D"]=exit>0?(exit/entry-1)*100:null;
+          const b0=benchmark.findIndex(x=>String(x.datetime)===String(v[i].datetime));
+          const bEntry=b0>=0?(Number(benchmark[b0].open)||Number(benchmark[b0].close)||0):0;
+          const bExit=b0>=0?(Number(benchmark[Math.min(benchmark.length-1,b0+horizon-1)]?.close)||0):0;
+          result["SPY"+horizon+"D"]=bEntry>0&&bExit>0?(bExit/bEntry-1)*100:null;
+        }
+        trades.push(result);
+        lastSignalIndex=i;
+      }
+    }
+    const summarize=h=>{
+      const vals=trades.map(t=>t["return"+h+"D"]).filter(Number.isFinite);
+      const excess=trades.map(t=>Number.isFinite(t["return"+h+"D"])&&Number.isFinite(t["SPY"+h+"D"])?t["return"+h+"D"]-t["SPY"+h+"D"]:null).filter(Number.isFinite);
+      return {n:vals.length,winRate:vals.length?Math.round(vals.filter(x=>x>0).length/vals.length*1000)/10:0,hit3Pct:vals.length?Math.round(vals.filter(x=>x>=3).length/vals.length*1000)/10:0,avgReturnPct:vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length*100)/100:null,avgExcessVsSPYPct:excess.length?Math.round(excess.reduce((a,b)=>a+b,0)/excess.length*100)/100:null};
+    };
+    results.push({symbol,historyBars:v.length,signals:trades.length,5D:summarize(5),10D:summarize(10),trades:trades.slice(-20)});
+  }
+  return results;
 }
 async function smartMoneyFastData(symbol,env,secDirectory={},institutionalSnap=[]){
   // RADAR: el FAST debe detectar movimiento temprano usando precio/volumen.
