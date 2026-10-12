@@ -273,8 +273,8 @@ export default {
         return json({status:"ok",provider:"OptionsBell",retrievedAt:new Date().toISOString(),data:parsed},200,{"cache-control":"no-store"});
       }
       if (url.pathname === "/smart-money-backtest") {
-        const requested=cleanSymbols(url.searchParams.get("symbols") || "NVDA,GOOGL,AMD,AVGO,PLTR,M,MUU,AMZN");
-        const symbols=requested.slice(0,8);
+        const requested=cleanSymbols(url.searchParams.get("symbols") || "NVDA,GOOGL,AMD,AVGO,PLTR,M,MUU,AMZN,JD,WFC,DAL,GRAB,RKLB,SOFI,TSLA,INTC");
+        const symbols=requested.slice(0,16);
         const backtest=await smartMoneyBacktest(symbols,env);
         return json({status:"ok",mode:"WALK_FORWARD_NO_LOOKAHEAD",generatedAt:new Date().toISOString(),...backtest},200,{"cache-control":"no-store"});
       }
