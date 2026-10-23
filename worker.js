@@ -135,7 +135,7 @@ async function finvizCandidates(){
     let last={ok:false,status:0,rows:[],error:"No host tried",htmlLength:0,method:"none"};
     for(const host of ["https://finviz.com","https://www.finviz.com"]){
       try{
-        const params="v=152&c=1,2,3,4,5,63,64,65,66,67&f=sh_price_o5,sh_avgvol_o500&o="+encodeURIComponent(cfg.sort)+"&r="+cfg.start;
+        const params="v=152&c=1,2,3,4,5,63,64,65,66,67&f=geo_usa,sh_price_o5,sh_avgvol_o500&o="+encodeURIComponent(cfg.sort)+"&r="+cfg.start;
         // CSV export contains the actual columns and is less brittle than parsing presentation HTML.
         const csvUrl=host+"/export.ashx?"+params;
         const cr=await fetchWithTimeout(csvUrl,{headers:{accept:"text/csv,text/plain,*/*","user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36","referer":"https://finviz.com/screener.ashx?"+params}},9000);
@@ -217,25 +217,33 @@ async function finvizCandidates(){
     if(!old)bySymbol.set(row.symbol,{...row,fields:finvizFields(row.headers,row.cells,row.symbol),appearances:1});
     else {old.appearances++;if(row.cells.length>old.cells.length){old.cells=row.cells;old.headers=row.headers;old.method=row.method;}}
   }
-  const candidates=[...bySymbol.values()];
-  const rowsWithCells=candidates.filter(x=>Array.isArray(x.cells)&&x.cells.length>1).length;
-  const symbolsOnly=candidates.length>0&&rowsWithCells===0;
+  const allCandidates=[...bySymbol.values()].map(x=>({...x,fields:x.fields||finvizFields(x.headers,x.cells,x.symbol)}));
+  const hasCoreFields=x=>{
+    const f=x.fields||{};
+    return f.country==="USA"&&["price","changePct","volume","averageVolume","relativeVolume"].every(k=>typeof f[k]==="number")
+      &&Boolean(f.sector)&&Boolean(f.industry);
+  };
+  const candidates=allCandidates.filter(hasCoreFields);
+  const rowsWithCells=allCandidates.filter(x=>Array.isArray(x.cells)&&x.cells.length>1).length;
+  const rowsWithCoreFields=candidates.length;
+  const symbolsOnly=allCandidates.length>0&&rowsWithCells===0;
+  const goodCoverage=allCandidates.length>0&&candidates.length/allCandidates.length>=0.8;
   return {
-    status:!candidates.length?"unavailable":symbolsOnly?"partial":rowsWithCells===candidates.length?"ok":"partial",
+    status:!allCandidates.length?"unavailable":goodCoverage?"ok":"partial",
     source:"Finviz public screener",
-    count:candidates.length,rowsWithCells,symbolsOnly,
+    count:candidates.length,rawCount:allCandidates.length,rowsWithCells,rowsWithCoreFields,droppedRows:allCandidates.length-candidates.length,symbolsOnly,
     symbols:candidates.map(x=>x.symbol),
-    candidates:candidates.slice(0,80).map(x=>({...x,fields:x.fields||finvizFields(x.headers,x.cells,x.symbol)})),
+    candidates:candidates.slice(0,80),
     pagesChecked:configs.length,pagesSucceeded:pages.filter(x=>x.ok).length,
     pageDiagnostics:pages.map((p,i)=>({page:i+1,ok:p.ok,httpStatus:p.status,rows:p.rows.length,htmlLength:p.htmlLength||0,method:p.method||"unknown",error:p.error||null,debug:p.debug||null,sampleHeaders:p.rows[0]?.headers||null,sampleCells:p.rows[0]?.cells||null,sampleFields:p.rows[0]?finvizFields(p.rows[0].headers,p.rows[0].cells,p.rows[0].symbol):null,sampleMethod:p.rows[0]?.method||null})),
     retrievedAt:new Date().toISOString(),
-    note:!candidates.length
+    note:!allCandidates.length
       ?"Finviz no devolvió símbolos legibles; el radar debe continuar con Yahoo."
-      :symbolsOnly
-        ?"ATENCIÓN: Finviz devolvió tickers, pero no se pudieron leer las columnas. No usar Finviz para validar precio, RVOL ni volumen hasta reparar el parser."
-        :rowsWithCells<candidates.length
-          ?"Extracción parcial: algunos tickers no tienen columnas parseadas. No tratar los campos vacíos como datos."
-          :"Columnas del screener extraídas. Los candidatos no son por sí solos señales de compra."
+      :!goodCoverage
+        ?"Finviz devolvió datos incompletos; se descartan las filas sin precio, cambio, volumen, volumen promedio, RVOL, sector/industria o mercado USA."
+        :candidates.length<allCandidates.length
+          ?"Columnas parseadas; filas incompletas/no estadounidenses descartadas. Los candidatos restantes aún deben validarse con Williams %R y backtest."
+          :"Columnas parseadas y campos esenciales validados. Los candidatos no son por sí solos señales de compra."
   };
 }
 async function yahooMovers() {
