@@ -31,3 +31,10 @@ jobs:
           URL="https://weekly-range-api.changowalu.workers.dev/smart-money-backtest?symbols=NVDA%2CGOOGL%2CAMD%2CAVGO%2CPLTR%2CM%2CMUU%2CAMZN%2CJD%2CWFC%2CDAL%2CGRAB%2CRKLB%2CSOFI%2CTSLA%2CINTC%2CMETA%2CUBER%2CHOOD%2CQQQM%2CSMH%2CXLF%2CIWM%2CVOO"
           RESPONSE="$(curl --retry 5 --retry-delay 3 --retry-connrefused -fsS "$URL")"
           printf '%s' "$RESPONSE" | python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status") == "ok", d; assert "portfolio" in d and "results" in d, d.keys(); assert len(d["results"]) == 24, len(d["results"]); print("Smart Money backtest OK:", len(d["results"]), "symbols"); print(json.dumps(d["portfolio"], separators=(",",":")))'
+
+      - name: Smoke test Finviz integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          RESPONSE="$(curl --retry 5 --retry-delay 3 --retry-connrefused -fsS "https://weekly-range-api.changowalu.workers.dev/finviz-candidates")"
+          printf '%s' "$RESPONSE" | python -c 'import json,sys; d=json.load(sys.stdin); print("Finviz status:", d.get("status"), "candidates:", d.get("count"), "pages:", d.get("pagesSucceeded"), "/", d.get("pagesChecked")); assert d.get("status") == "ok" and d.get("count",0)>0, d'
