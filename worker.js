@@ -142,17 +142,28 @@ async function finvizCandidates(){
     else {old.appearances++; if(row.cells.length>old.cells.length)old.cells=row.cells;}
   }
   const candidates=[...bySymbol.values()];
+  const rowsWithCells=candidates.filter(x=>Array.isArray(x.cells)&&x.cells.length>0).length;
+  const symbolsOnly=candidates.length>0&&rowsWithCells===0;
   return {
-    status:candidates.length?"ok":"unavailable",
+    // "ok" means ticker rows AND their columns were parsed. A ticker-only fallback is partial, not healthy.
+    status:!candidates.length?"unavailable":symbolsOnly?"partial":rowsWithCells===candidates.length?"ok":"partial",
     source:"Finviz public screener",
     count:candidates.length,
+    rowsWithCells,
+    symbolsOnly,
     symbols:candidates.map(x=>x.symbol),
     candidates:candidates.slice(0,80),
     pagesChecked:configs.length,
     pagesSucceeded:pages.filter(x=>x.ok).length,
     pageDiagnostics:pages.map((p,i)=>({page:i+1,ok:p.ok,httpStatus:p.status,rows:p.rows.length,htmlLength:p.htmlLength||0,error:p.error||null})),
     retrievedAt:new Date().toISOString(),
-    note:candidates.length?"Candidatos extraídos del screener público; no son por sí solos señales de compra.":"Finviz no devolvió símbolos legibles; el radar debe continuar con Yahoo y este diagnóstico permite detectar cambios de formato o bloqueo."
+    note:!candidates.length
+      ?"Finviz no devolvió símbolos legibles; el radar debe continuar con Yahoo."
+      :symbolsOnly
+        ?"ATENCIÓN: Finviz devolvió tickers, pero no se pudieron leer las columnas. Estos símbolos sirven solo como candidatos; no usar Finviz para validar precio, RVOL ni volumen hasta reparar el parser."
+        :rowsWithCells<candidates.length
+          ?"Extracción parcial: algunos tickers no tienen columnas parseadas. No tratar los campos vacíos como datos."
+          :"Columnas del screener extraídas. Los candidatos no son por sí solos señales de compra."
   };
 }
 async function yahooMovers() {
