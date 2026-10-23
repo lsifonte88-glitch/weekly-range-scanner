@@ -96,23 +96,57 @@ async function yahooScreener(scrIds,count=250) {
   return [];
 }
 async function finvizCandidates(){
-  // Lee el screener público sin credenciales. Tolera tanto tablas antiguas como el HTML nuevo.
+  // Preferir el export CSV oficial del screener: evita depender del marcado HTML cambiante.
   const configs=[
     {sort:"-relativevolume",start:1},
     {sort:"-relativevolume",start:21},
     {sort:"-change",start:1},
     {sort:"-change",start:21}
   ];
+  function parseCsvLine(line){
+    const out=[]; let cur="", quoted=false;
+    for(let i=0;i<line.length;i++){
+      const ch=line[i];
+      if(ch==='"'&&quoted&&line[i+1]==='"'){cur+='"';i++;}
+      else if(ch==='"')quoted=!quoted;
+      else if(ch===','&&!quoted){out.push(cur);cur="";}
+      else cur+=ch;
+    }
+    out.push(cur); return out.map(x=>x.trim());
+  }
   const pages=await Promise.all(configs.map(async cfg=>{
-    let last={ok:false,status:0,rows:[],error:"No host tried",htmlLength:0};
+    let last={ok:false,status:0,rows:[],error:"No host tried",htmlLength:0,method:"none"};
     for(const host of ["https://finviz.com","https://www.finviz.com"]){
       try{
-        const url=host+"/screener.ashx?v=111&f=sh_price_o5,sh_avgvol_o500&o="+encodeURIComponent(cfg.sort)+"&r="+cfg.start;
-        const r=await fetchWithTimeout(url,{headers:{accept:"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8","user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36","accept-language":"en-US,en;q=0.9","referer":"https://finviz.com/"}},9000);
-        if(!r.ok){last={ok:false,status:r.status,rows:[],error:"HTTP "+r.status+" from "+host,htmlLength:0};continue;}
+        const params="v=111&f=sh_price_o5,sh_avgvol_o500&o="+encodeURIComponent(cfg.sort)+"&r="+cfg.start;
+        // CSV export contains the actual columns and is less brittle than parsing presentation HTML.
+        const csvUrl=host+"/export.ashx?"+params;
+        const cr=await fetchWithTimeout(csvUrl,{headers:{accept:"text/csv,text/plain,*/*","user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36","referer":"https://finviz.com/screener.ashx?"+params}},9000);
+        if(cr.ok){
+          const csv=await cr.text();
+          const lines=csv.replace(/^\uFEFF/,"").trim().split(/\r?\n/);
+          if(lines.length>1 && /ticker/i.test(lines[0])){
+            const headers=parseCsvLine(lines[0]);
+            const ti=headers.findIndex(h=>/^ticker$/i.test(h));
+            const parsed=[];
+            for(const line of lines.slice(1)){
+              const cells=parseCsvLine(line);
+              const symbol=String(cells[ti>=0?ti:1]||"").toUpperCase().replace(/^\$/,"");
+              if(!/^[A-Z0-9.-]+$/.test(symbol)||symbol==="MSFT")continue;
+              parsed.push({symbol,sort:cfg.sort.startsWith("-")?cfg.sort.slice(1):cfg.sort,cells,headers,method:"csv"});
+            }
+            if(parsed.length){
+              last={ok:true,status:cr.status,rows:parsed,htmlLength:csv.length,error:null,method:"csv"};
+              break;
+            }
+          }
+        }
+        // Fallback to the public HTML screener if export is blocked or its format changes.
+        const url=host+"/screener.ashx?"+params;
+        const r=await fetchWithTimeout(url,{headers:{accept:"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8","user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36","accept-language":"en-US,en;q=0.9","referer":"https://finviz.com/"},},9000);
+        if(!r.ok){last={ok:false,status:r.status,rows:[],error:"HTTP "+r.status+" from "+host,htmlLength:0,method:"html"};continue;}
         const html=(await r.text()).replace(/&amp;/gi,"&");
         const byTicker=new Map();
-        // Prefer actual screener rows where possible.
         for(const m of html.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)){
           const row=m[1];
           const link=row.match(/(?:quote\.ashx\?t=|quote\?t=)([A-Z0-9.\-]+)/i);
@@ -120,18 +154,25 @@ async function finvizCandidates(){
           const symbol=String(link[1]||"").toUpperCase();
           if(!/^[A-Z0-9.-]+$/.test(symbol)||symbol==="MSFT")continue;
           const cells=[...row.matchAll(/<(?:td|th)\b[^>]*>([\s\S]*?)<\/(?:td|th)>/gi)].map(x=>x[1].replace(/<[^>]*>/g," ").replace(/&nbsp;|&#160;/gi," ").replace(/&amp;/gi,"&").replace(/&#39;|&apos;/gi,"'").replace(/&quot;/gi,'"').replace(/\s+/g," ").trim());
-          byTicker.set(symbol,{symbol,sort:cfg.sort.startsWith("-")?cfg.sort.slice(1):cfg.sort,cells});
+          if(cells.length)byTicker.set(symbol,{symbol,sort:cfg.sort.startsWith("-")?cfg.sort.slice(1):cfg.sort,cells,method:"html"});
         }
-        // Fallback: the current screener may place ticker links outside a simple tr structure.
+        // Capture a row around any ticker link if the table markup differs from the usual screener table.
         if(!byTicker.size){
           for(const m of html.matchAll(/(?:href|data-href)=["'][^"']*(?:quote\.ashx|quote)\?[^"']*?t=([A-Z0-9.\-]+)/gi)){
             const symbol=String(m[1]||"").toUpperCase();
-            if(/^[A-Z0-9.-]+$/.test(symbol)&&symbol!=="MSFT")byTicker.set(symbol,{symbol,sort:cfg.sort.startsWith("-")?cfg.sort.slice(1):cfg.sort,cells:[]});
+            if(!/^[A-Z0-9.-]+$/.test(symbol)||symbol==="MSFT")continue;
+            const before=html.lastIndexOf("<tr",m.index), close=html.indexOf("</tr>",m.index);
+            let cells=[];
+            if(before>=0&&close>m.index){
+              const row=html.slice(before,close+5);
+              cells=[...row.matchAll(/<(?:td|th)\b[^>]*>([\s\S]*?)<\/(?:td|th)>/gi)].map(x=>x[1].replace(/<[^>]*>/g," ").replace(/&nbsp;|&#160;/gi," ").replace(/&amp;/gi,"&").replace(/\s+/g," ").trim());
+            }
+            byTicker.set(symbol,{symbol,sort:cfg.sort.startsWith("-")?cfg.sort.slice(1):cfg.sort,cells,method:"html-fallback"});
           }
         }
-        last={ok:true,status:r.status,rows:[...byTicker.values()],htmlLength:html.length,error:null};
+        last={ok:true,status:r.status,rows:[...byTicker.values()],htmlLength:html.length,error:null,method:"html"};
         break;
-      }catch(e){last={ok:false,status:0,rows:[],error:e?.message||String(e),htmlLength:0};}
+      }catch(e){last={ok:false,status:0,rows:[],error:e?.message||String(e),htmlLength:0,method:"error"};}
     }
     return last;
   }));
@@ -139,28 +180,24 @@ async function finvizCandidates(){
   for(const page of pages)for(const row of page.rows){
     const old=bySymbol.get(row.symbol);
     if(!old)bySymbol.set(row.symbol,{...row,appearances:1});
-    else {old.appearances++; if(row.cells.length>old.cells.length)old.cells=row.cells;}
+    else {old.appearances++;if(row.cells.length>old.cells.length){old.cells=row.cells;old.headers=row.headers;old.method=row.method;}}
   }
   const candidates=[...bySymbol.values()];
-  const rowsWithCells=candidates.filter(x=>Array.isArray(x.cells)&&x.cells.length>0).length;
+  const rowsWithCells=candidates.filter(x=>Array.isArray(x.cells)&&x.cells.length>1).length;
   const symbolsOnly=candidates.length>0&&rowsWithCells===0;
   return {
-    // "ok" means ticker rows AND their columns were parsed. A ticker-only fallback is partial, not healthy.
     status:!candidates.length?"unavailable":symbolsOnly?"partial":rowsWithCells===candidates.length?"ok":"partial",
     source:"Finviz public screener",
-    count:candidates.length,
-    rowsWithCells,
-    symbolsOnly,
+    count:candidates.length,rowsWithCells,symbolsOnly,
     symbols:candidates.map(x=>x.symbol),
     candidates:candidates.slice(0,80),
-    pagesChecked:configs.length,
-    pagesSucceeded:pages.filter(x=>x.ok).length,
-    pageDiagnostics:pages.map((p,i)=>({page:i+1,ok:p.ok,httpStatus:p.status,rows:p.rows.length,htmlLength:p.htmlLength||0,error:p.error||null})),
+    pagesChecked:configs.length,pagesSucceeded:pages.filter(x=>x.ok).length,
+    pageDiagnostics:pages.map((p,i)=>({page:i+1,ok:p.ok,httpStatus:p.status,rows:p.rows.length,htmlLength:p.htmlLength||0,method:p.method||"unknown",error:p.error||null})),
     retrievedAt:new Date().toISOString(),
     note:!candidates.length
       ?"Finviz no devolvió símbolos legibles; el radar debe continuar con Yahoo."
       :symbolsOnly
-        ?"ATENCIÓN: Finviz devolvió tickers, pero no se pudieron leer las columnas. Estos símbolos sirven solo como candidatos; no usar Finviz para validar precio, RVOL ni volumen hasta reparar el parser."
+        ?"ATENCIÓN: Finviz devolvió tickers, pero no se pudieron leer las columnas. No usar Finviz para validar precio, RVOL ni volumen hasta reparar el parser."
         :rowsWithCells<candidates.length
           ?"Extracción parcial: algunos tickers no tienen columnas parseadas. No tratar los campos vacíos como datos."
           :"Columnas del screener extraídas. Los candidatos no son por sí solos señales de compra."
