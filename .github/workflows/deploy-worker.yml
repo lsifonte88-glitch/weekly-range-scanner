@@ -36,5 +36,5 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          RESPONSE="$(curl --retry 5 --retry-delay 3 --retry-connrefused -fsS "https://weekly-range-api.changowalu.workers.dev/finviz-candidates")"
-          printf '%s' "$RESPONSE" | python -c 'import json,sys; d=json.load(sys.stdin); print("Finviz status:", d.get("status"), "candidates:", d.get("count"), "pages:", d.get("pagesSucceeded"), "/", d.get("pagesChecked")); assert d.get("status") == "ok" and d.get("count",0)>0, d'
+          RESPONSE="$(curl --retry 2 --retry-delay 2 --retry-connrefused -sS "https://weekly-range-api.changowalu.workers.dev/finviz-candidates")"
+          printf '%s' "$RESPONSE" | python -c 'import json,sys; d=json.load(sys.stdin); print("Finviz diagnostics:", json.dumps(d, separators=(",",":"))); assert d.get("status") == "ok" and d.get("count",0)>0, d'
