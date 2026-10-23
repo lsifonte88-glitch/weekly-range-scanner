@@ -113,18 +113,18 @@ async function finvizCandidates(){
         const html=(await r.text()).replace(/&amp;/gi,"&");
         const byTicker=new Map();
         // Prefer actual screener rows where possible.
-        for(const m of html.matchAll(/<tr\\b[^>]*>([\\s\\S]*?)<\\/tr>/gi)){
+        for(const m of html.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)){
           const row=m[1];
-          const link=row.match(/(?:quote\\.ashx\\?t=|quote\\?t=)([A-Z0-9.\\-]+)/i);
+          const link=row.match(/(?:quote\.ashx\?t=|quote\?t=)([A-Z0-9.\-]+)/i);
           if(!link)continue;
           const symbol=String(link[1]||"").toUpperCase();
           if(!/^[A-Z0-9.-]+$/.test(symbol)||symbol==="MSFT")continue;
-          const cells=[...row.matchAll(/<(?:td|th)\\b[^>]*>([\\s\\S]*?)<\\/(?:td|th)>/gi)].map(x=>x[1].replace(/<[^>]*>/g," ").replace(/&nbsp;|&#160;/gi," ").replace(/&amp;/gi,"&").replace(/&#39;|&apos;/gi,"'").replace(/&quot;/gi,'"').replace(/\\s+/g," ").trim());
+          const cells=[...row.matchAll(/<(?:td|th)\b[^>]*>([\s\S]*?)<\/(?:td|th)>/gi)].map(x=>x[1].replace(/<[^>]*>/g," ").replace(/&nbsp;|&#160;/gi," ").replace(/&amp;/gi,"&").replace(/&#39;|&apos;/gi,"'").replace(/&quot;/gi,'"').replace(/\s+/g," ").trim());
           byTicker.set(symbol,{symbol,sort:cfg.sort.startsWith("-")?cfg.sort.slice(1):cfg.sort,cells});
         }
         // Fallback: the current screener may place ticker links outside a simple tr structure.
         if(!byTicker.size){
-          for(const m of html.matchAll(/(?:href|data-href)=["'][^"']*(?:quote\\.ashx|quote)\\?[^"']*?t=([A-Z0-9.\\-]+)/gi)){
+          for(const m of html.matchAll(/(?:href|data-href)=["'][^"']*(?:quote\.ashx|quote)\?[^"']*?t=([A-Z0-9.\-]+)/gi)){
             const symbol=String(m[1]||"").toUpperCase();
             if(/^[A-Z0-9.-]+$/.test(symbol)&&symbol!=="MSFT")byTicker.set(symbol,{symbol,sort:cfg.sort.startsWith("-")?cfg.sort.slice(1):cfg.sort,cells:[]});
           }
