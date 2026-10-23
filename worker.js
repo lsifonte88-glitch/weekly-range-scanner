@@ -156,18 +156,36 @@ async function finvizCandidates(){
           const cells=[...row.matchAll(/<(?:td|th)\b[^>]*>([\s\S]*?)<\/(?:td|th)>/gi)].map(x=>x[1].replace(/<[^>]*>/g," ").replace(/&nbsp;|&#160;/gi," ").replace(/&amp;/gi,"&").replace(/&#39;|&apos;/gi,"'").replace(/&quot;/gi,'"').replace(/\s+/g," ").trim());
           if(cells.length)byTicker.set(symbol,{symbol,sort:cfg.sort.startsWith("-")?cfg.sort.slice(1):cfg.sort,cells,method:"html"});
         }
-        // Capture a row around any ticker link if the table markup differs from the usual screener table.
+        // Finviz switched from HTML table rows to a div-based virtual grid.
+        // Parse data-row-index containers and data-column-id cells before legacy fallback.
+        if(!byTicker.size){
+          const rowStarts=[...html.matchAll(/<div\b[^>]*data-row-index=["'](\d+)["'][^>]*>/gi)];
+          for(let ri=0;ri<rowStarts.length;ri++){
+            const start=rowStarts[ri].index;
+            const end=ri+1<rowStarts.length?rowStarts[ri+1].index:html.length;
+            const row=html.slice(start,end);
+            const link=row.match(/(?:href|data-href)=["'][^"']*(?:quote\.ashx|quote)\?[^"']*?t=([A-Z0-9.\-]+)/i);
+            if(!link)continue;
+            const symbol=String(link[1]||"").toUpperCase();
+            if(!/^[A-Z0-9.-]+$/.test(symbol)||symbol==="MSFT")continue;
+            const cellStarts=[...row.matchAll(/<div\b[^>]*data-column-id=["']([^"']+)["'][^>]*>/gi)];
+            const cells=[],headers=[];
+            for(let ci=0;ci<cellStarts.length;ci++){
+              const cs=cellStarts[ci].index;
+              const ce=ci+1<cellStarts.length?cellStarts[ci+1].index:row.length;
+              const raw=row.slice(cs,ce).replace(/<[^>]*>/g," ").replace(/&nbsp;|&#160;|&#xA0;/gi," ").replace(/&amp;/gi,"&").replace(/&#39;|&apos;/gi,"'").replace(/&quot;/gi,'"').replace(/&#(\d+);/g,(_,n)=>String.fromCharCode(Number(n))).replace(/\s+/g," ").trim();
+              headers.push(cellStarts[ci][1]);
+              cells.push(raw);
+            }
+            if(cells.length)byTicker.set(symbol,{symbol,sort:cfg.sort.startsWith("-")?cfg.sort.slice(1):cfg.sort,cells,headers,method:"html-grid"});
+          }
+        }
+        // Legacy fallback: at minimum keep ticker discovery, but these rows are not trusted as metrics.
         if(!byTicker.size){
           for(const m of html.matchAll(/(?:href|data-href)=["'][^"']*(?:quote\.ashx|quote)\?[^"']*?t=([A-Z0-9.\-]+)/gi)){
             const symbol=String(m[1]||"").toUpperCase();
             if(!/^[A-Z0-9.-]+$/.test(symbol)||symbol==="MSFT")continue;
-            const before=html.lastIndexOf("<tr",m.index), close=html.indexOf("</tr>",m.index);
-            let cells=[];
-            if(before>=0&&close>m.index){
-              const row=html.slice(before,close+5);
-              cells=[...row.matchAll(/<(?:td|th)\b[^>]*>([\s\S]*?)<\/(?:td|th)>/gi)].map(x=>x[1].replace(/<[^>]*>/g," ").replace(/&nbsp;|&#160;/gi," ").replace(/&amp;/gi,"&").replace(/\s+/g," ").trim());
-            }
-            byTicker.set(symbol,{symbol,sort:cfg.sort.startsWith("-")?cfg.sort.slice(1):cfg.sort,cells,method:"html-fallback"});
+            byTicker.set(symbol,{symbol,sort:cfg.sort.startsWith("-")?cfg.sort.slice(1):cfg.sort,cells:[],method:"html-fallback"});
           }
         }
         last={ok:true,status:r.status,rows:[...byTicker.values()],htmlLength:html.length,error:null,method:"html",debug:{trTags:(html.match(/<tr\b/gi)||[]).length,tdTags:(html.match(/<td\b/gi)||[]).length,quoteLinks:(html.match(/quote(?:\.ashx)?\?t=/gi)||[]).length,tableTags:(html.match(/<table\b/gi)||[]).length,firstTickerLink:(html.match(/.{0,120}(?:quote\.ashx\?t=|quote\?t=)[A-Z0-9.\-]+.{0,180}/i)||[])[0]||null}};
