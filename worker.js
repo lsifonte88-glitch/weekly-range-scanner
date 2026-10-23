@@ -104,23 +104,28 @@ async function finvizCandidates(){
     {sort:"-change",start:21}
   ];
   const pages=await Promise.all(configs.map(async cfg=>{
-    try{
-      const url="https://finviz.com/screener.ashx?v=161&f=sh_price_o5,sh_avgvol_o500&o="+encodeURIComponent(cfg.sort)+"&r="+cfg.start;
-      const r=await fetchWithTimeout(url,{headers:{accept:"text/html,application/xhtml+xml","user-agent":"Mozilla/5.0 (compatible; WeeklyRangeScanner/1.0)"}},6500);
-      if(!r.ok)return {ok:false,status:r.status,rows:[]};
-      const html=await r.text();
-      const rows=[];
-      for(const m of html.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)){
-        const row=m[1];
-        const link=row.match(/href=["'][^"']*quote\.ashx\?t=([A-Z0-9.\-]+)/i);
-        if(!link)continue;
-        const symbol=String(link[1]||"").toUpperCase();
-        if(!/^[A-Z0-9.-]+$/.test(symbol)||symbol==="MSFT")continue;
-        const cells=[...row.matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)].map(x=>x[1].replace(/<[^>]*>/g," ").replace(/&nbsp;|&#160;/gi," ").replace(/&amp;/gi,"&").replace(/&#39;|&apos;/gi,"'").replace(/&quot;/gi,'"').replace(/\s+/g," ").trim());
-        rows.push({symbol,sort:cfg.sort.startsWith("-")?cfg.sort.slice(1):cfg.sort,cells});
-      }
-      return {ok:true,status:r.status,rows};
-    }catch(e){return {ok:false,status:0,rows:[],error:e?.message||String(e)}}
+    let last={ok:false,status:0,rows:[],error:"No host tried"};
+    for(const host of ["https://www.finviz.com","https://finviz.com"]){
+      try{
+        const url=host+"/screener.ashx?v=111&f=sh_price_o5,sh_avgvol_o500&o="+encodeURIComponent(cfg.sort)+"&r="+cfg.start;
+        const r=await fetchWithTimeout(url,{headers:{accept:"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8","user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36","accept-language":"en-US,en;q=0.9","referer":"https://finviz.com/"}},9000);
+        if(!r.ok){last={ok:false,status:r.status,rows:[],error:"HTTP "+r.status+" from "+host};continue;}
+        const html=await r.text();
+        const rows=[];
+        for(const m of html.matchAll(/<tr\\b[^>]*>([\\s\\S]*?)<\\/tr>/gi)){
+          const row=m[1];
+          const link=row.match(/(?:quote\\.ashx\\?t=|quote\\?t=)([A-Z0-9.\\-]+)/i);
+          if(!link)continue;
+          const symbol=String(link[1]||"").toUpperCase();
+          if(!/^[A-Z0-9.-]+$/.test(symbol)||symbol==="MSFT")continue;
+          const cells=[...row.matchAll(/<td\\b[^>]*>([\\s\\S]*?)<\\/td>/gi)].map(x=>x[1].replace(/<[^>]*>/g," ").replace(/&nbsp;|&#160;/gi," ").replace(/&amp;/gi,"&").replace(/&#39;|&apos;/gi,"'").replace(/&quot;/gi,'"').replace(/\\s+/g," ").trim());
+          rows.push({symbol,sort:cfg.sort.startsWith("-")?cfg.sort.slice(1):cfg.sort,cells});
+        }
+        last={ok:true,status:r.status,rows};
+        break;
+      }catch(e){last={ok:false,status:0,rows:[],error:e?.message||String(e)}}
+    }
+    return last;
   }));
   const bySymbol=new Map();
   for(const page of pages)for(const row of page.rows){
