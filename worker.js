@@ -210,7 +210,7 @@ async function finvizCandidates(){
     symbols:candidates.map(x=>x.symbol),
     candidates:candidates.slice(0,80),
     pagesChecked:configs.length,pagesSucceeded:pages.filter(x=>x.ok).length,
-    pageDiagnostics:pages.map((p,i)=>({page:i+1,ok:p.ok,httpStatus:p.status,rows:p.rows.length,htmlLength:p.htmlLength||0,method:p.method||"unknown",error:p.error||null,debug:p.debug||null})),
+    pageDiagnostics:pages.map((p,i)=>({page:i+1,ok:p.ok,httpStatus:p.status,rows:p.rows.length,htmlLength:p.htmlLength||0,method:p.method||"unknown",error:p.error||null,debug:p.debug||null,sampleHeaders:p.rows[0]?.headers||null,sampleCells:p.rows[0]?.cells||null,sampleMethod:p.rows[0]?.method||null})),
     retrievedAt:new Date().toISOString(),
     note:!candidates.length
       ?"Finviz no devolvió símbolos legibles; el radar debe continuar con Yahoo."
@@ -385,7 +385,7 @@ export default {
             source:finviz.status==="ok"?"Finviz + Yahoo Finance screeners":"Yahoo Finance screener (Finviz no disponible)",
             finviz:{status:finviz.status,count:finviz.count||0,pagesSucceeded:finviz.pagesSucceeded||0,note:finviz.note||""},
             yahooCount:yahooSymbols.length,
-            note:"Radar combinado: candidatos de Finviz + actividad/crecimiento/small caps de Yahoo. Los candidatos deben validarse con Williams %R y backtest."
+            note:finviz.status==="ok"?"Finviz aporta filas con columnas parseadas y Yahoo amplía el universo; los candidatos deben validarse con Williams %R y backtest.":"Finviz no aportó datos de columnas fiables; se usa Yahoo Finance como fuente de candidatos. Validar todas las señales con Williams %R y backtest."
           },200,{"cache-control":"public, max-age=60"});
         }
         return json({status:"error",message:"Finviz y Yahoo Finance no devolvieron candidatos."},502);
