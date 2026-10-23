@@ -114,11 +114,28 @@ async function finvizCandidates(){
     }
     out.push(cur); return out.map(x=>x.trim());
   }
+  function finvizFields(headers,cells,symbol){
+    const norm=x=>String(x||"").toLowerCase().replace(/[^a-z0-9]/g,"");
+    const index=names=>(headers||[]).findIndex(h=>names.includes(norm(h)));
+    const val=names=>{const i=index(names);return i>=0?String(cells?.[i]||"").trim():null;};
+    const num=names=>{const raw=val(names);if(raw==null||raw===""||raw==="-"||raw==="N/A")return null;const n=Number(raw.replace(/[$,%]/g,"").replace(/,/g,""));return Number.isFinite(n)?n:null;};
+    return {
+      symbol,
+      sector:val(["sector"]),
+      industry:val(["industry"]),
+      country:val(["country"]),
+      price:num(["price"]),
+      changePct:num(["change","changepercent"]),
+      volume:num(["volume","currentvolume"]),
+      averageVolume:num(["averagevolume","avgvolume","averagevolume3month"]),
+      relativeVolume:num(["relativevolume","relvolume","rvol"])
+    };
+  }
   const pages=await Promise.all(configs.map(async cfg=>{
     let last={ok:false,status:0,rows:[],error:"No host tried",htmlLength:0,method:"none"};
     for(const host of ["https://finviz.com","https://www.finviz.com"]){
       try{
-        const params="v=111&f=sh_price_o5,sh_avgvol_o500&o="+encodeURIComponent(cfg.sort)+"&r="+cfg.start;
+        const params="v=152&c=1,2,3,4,5,63,64,65,66,67&f=sh_price_o5,sh_avgvol_o500&o="+encodeURIComponent(cfg.sort)+"&r="+cfg.start;
         // CSV export contains the actual columns and is less brittle than parsing presentation HTML.
         const csvUrl=host+"/export.ashx?"+params;
         const cr=await fetchWithTimeout(csvUrl,{headers:{accept:"text/csv,text/plain,*/*","user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36","referer":"https://finviz.com/screener.ashx?"+params}},9000);
@@ -197,7 +214,7 @@ async function finvizCandidates(){
   const bySymbol=new Map();
   for(const page of pages)for(const row of page.rows){
     const old=bySymbol.get(row.symbol);
-    if(!old)bySymbol.set(row.symbol,{...row,appearances:1});
+    if(!old)bySymbol.set(row.symbol,{...row,fields:finvizFields(row.headers,row.cells,row.symbol),appearances:1});
     else {old.appearances++;if(row.cells.length>old.cells.length){old.cells=row.cells;old.headers=row.headers;old.method=row.method;}}
   }
   const candidates=[...bySymbol.values()];
@@ -208,7 +225,7 @@ async function finvizCandidates(){
     source:"Finviz public screener",
     count:candidates.length,rowsWithCells,symbolsOnly,
     symbols:candidates.map(x=>x.symbol),
-    candidates:candidates.slice(0,80),
+    candidates:candidates.slice(0,80).map(x=>({...x,fields:x.fields||finvizFields(x.headers,x.cells,x.symbol)})),
     pagesChecked:configs.length,pagesSucceeded:pages.filter(x=>x.ok).length,
     pageDiagnostics:pages.map((p,i)=>({page:i+1,ok:p.ok,httpStatus:p.status,rows:p.rows.length,htmlLength:p.htmlLength||0,method:p.method||"unknown",error:p.error||null,debug:p.debug||null,sampleHeaders:p.rows[0]?.headers||null,sampleCells:p.rows[0]?.cells||null,sampleMethod:p.rows[0]?.method||null})),
     retrievedAt:new Date().toISOString(),
