@@ -104,7 +104,9 @@ async function smLoad(){
     // Universo base fijo evita depender exclusivamente de ganadores del día.
     const coreUniverse=["M","MUU","JD","WFC","DAL","GRAB","RKLB","SOFI","TSLA","INTC","NVDA","AMD","AVGO","GOOGL","AMZN","PLTR"];
     const dynamicSymbols=scanCandidates.map(x=>String(x).toUpperCase().replace(/[^A-Z0-9.\\-]/g,"")).filter(Boolean);
-    const scanList=[...new Set(["M","MUU",...importedSymbols,...coreUniverse,...dynamicSymbols])].slice(0,24);
+    // Prioriza candidatos dinámicos del prefilter (ahora Finviz + Yahoo) para
+    // que no queden relegados detrás de todo el universo fijo.
+    const scanList=[...new Set(["M","MUU",...importedSymbols,...dynamicSymbols,...coreUniverse])].slice(0,24);
     if(!scanList.length)throw new Error("El mercado no devolvió candidatos.");
     let all=[];
     for(let i=0;i<scanList.length;i+=8){
