@@ -95,6 +95,53 @@ async function yahooScreener(scrIds,count=250) {
   }
   return [];
 }
+async function finvizCandidates(){
+  // Lee el screener público de Finviz; no usa credenciales ni inventa resultados.
+  const configs=[
+    {sort:"-relativevolume",start:1},
+    {sort:"-relativevolume",start:21},
+    {sort:"-change",start:1},
+    {sort:"-change",start:21}
+  ];
+  const pages=await Promise.all(configs.map(async cfg=>{
+    try{
+      const url="https://finviz.com/screener.ashx?v=161&f=sh_price_o5,sh_avgvol_o500&o="+encodeURIComponent(cfg.sort)+"&r="+cfg.start;
+      const r=await fetchWithTimeout(url,{headers:{accept:"text/html,application/xhtml+xml","user-agent":"Mozilla/5.0 (compatible; WeeklyRangeScanner/1.0)"}},6500);
+      if(!r.ok)return {ok:false,status:r.status,rows:[]};
+      const html=await r.text();
+      const rows=[];
+      for(const m of html.matchAll(/<tr\\b[^>]*>([\\s\\S]*?)<\\/tr>/gi)){
+        const row=m[1];
+        const link=row.match(/href=["'][^"']*quote\\.ashx\\?t=([A-Z0-9.\\-]+)/i);
+        if(!link)continue;
+        const symbol=String(link[1]||"").toUpperCase();
+        if(!/^[A-Z0-9.-]+$/.test(symbol)||symbol==="MSFT")continue;
+        const cells=[...row.matchAll(/<td\\b[^>]*>([\\s\\S]*?)<\\/td>/gi)].map(x=>x[1].replace(/<[^>]*>/g," ").replace(/&nbsp;|&#160;/gi," ").replace(/&amp;/gi,"&").replace(/&#39;|&apos;/gi,"'").replace(/&quot;/gi,'"').replace(/\\s+/g," ").trim());
+        rows.push({symbol,sort:cfg.sort.startsWith("-")?cfg.sort.slice(1):cfg.sort,cells});
+      }
+      return {ok:true,status:r.status,rows};
+    }catch(e){return {ok:false,status:0,rows:[],error:e?.message||String(e)}}
+  }));
+  const bySymbol=new Map();
+  for(const page of pages)for(const row of page.rows){
+    const old=bySymbol.get(row.symbol);
+    if(!old)bySymbol.set(row.symbol,{...row,appearances:1});
+    else {old.appearances++; if(row.cells.length>old.cells.length)old.cells=row.cells;}
+  }
+  const candidates=[...bySymbol.values()];
+  return {
+    status:candidates.length?"ok":"unavailable",
+    source:"Finviz public screener",
+    count:candidates.length,
+    symbols:candidates.map(x=>x.symbol),
+    candidates:candidates.slice(0,80),
+    pagesChecked:configs.length,
+    pagesSucceeded:pages.filter(x=>x.ok).length,
+    retrievedAt:new Date().toISOString(),
+    note:candidates.length?"Candidatos extraídos del screener público; no son por sí solos señales de compra.":"Finviz no devolvió filas legibles; posible bloqueo o cambio de formato."
+  };
+}
+
 async function yahooMovers() {
   // Prefiltro orientado a ANTICIPACIÓN: no usa solo ganadores/perdedores.
   // Mezcla actividad, crecimiento y small caps para encontrar acumulación antes
@@ -242,12 +289,26 @@ export default {
         return new Response(await r.text(), { headers: { "content-type": "application/javascript; charset=UTF-8", "cache-control": "no-store" } });
       }
       if (url.pathname === "/health") return json({ status: "ok", service: "Weekly Range Scanner PRO", time: new Date().toISOString() });
+      if (url.pathname === "/finviz-candidates") {
+        const out=await finvizCandidates();
+        return json(out,out.status==="ok"?200:502,{"cache-control":"no-store"});
+      }
       if (url.pathname === "/prefilter") {
-        const symbols = await yahooMovers();
+        const [yahooSymbols,finviz]=await Promise.all([yahooMovers(),finvizCandidates()]);
+        // Finviz se antepone para que sus candidatos entren primero en el radar,
+        // sin perder la fuente dinámica de Yahoo como respaldo/complemento.
+        const symbols=[...new Set([...(finviz.symbols||[]),...yahooSymbols])];
         if (symbols.length) {
-          return json({status:"ok",count:symbols.length,symbols:symbols.slice(0,32),generatedAt:new Date().toISOString(),source:"Yahoo Finance screener",note:"Prefiltro dinámico orientado a anticipación: actividad + crecimiento + small caps; prioriza RVOL y movimiento contenido."},200,{"cache-control":"public, max-age=60"});
+          return json({
+            status:"ok",count:symbols.length,symbols:symbols.slice(0,48),
+            generatedAt:new Date().toISOString(),
+            source:finviz.status==="ok"?"Finviz + Yahoo Finance screeners":"Yahoo Finance screener (Finviz no disponible)",
+            finviz:{status:finviz.status,count:finviz.count||0,pagesSucceeded:finviz.pagesSucceeded||0,note:finviz.note||""},
+            yahooCount:yahooSymbols.length,
+            note:"Radar combinado: candidatos de Finviz + actividad/crecimiento/small caps de Yahoo. Los candidatos deben validarse con Williams %R y backtest."
+          },200,{"cache-control":"public, max-age=60"});
         }
-        return json({status:"error",message:"No se pudieron detectar movimientos del mercado en Yahoo Finance."},502);
+        return json({status:"error",message:"Finviz y Yahoo Finance no devolvieron candidatos."},502);
       }
       if (url.pathname === "/universe") {
         const symbols = await universe(env);
