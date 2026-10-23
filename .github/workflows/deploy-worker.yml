@@ -32,6 +32,13 @@ jobs:
           RESPONSE="$(curl --retry 5 --retry-delay 3 --retry-connrefused -fsS "$URL")"
           printf '%s' "$RESPONSE" | python -c 'import json,sys; d=json.load(sys.stdin); assert d.get("status") == "ok", d; assert "portfolio" in d and "results" in d, d.keys(); assert len(d["results"]) == 24, len(d["results"]); print("Smart Money backtest OK:", len(d["results"]), "symbols"); print(json.dumps(d["portfolio"], separators=(",",":")))'
 
+      - name: Smoke test prefilter integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          RESPONSE="$(curl --retry 3 --retry-delay 3 --retry-connrefused -fsS "https://weekly-range-api.changowalu.workers.dev/prefilter")"
+          printf '%s' "$RESPONSE" | python -c 'import json,re,sys; d=json.load(sys.stdin); assert d.get("status")=="ok", d; symbols=d.get("symbols") or []; assert len(symbols)>=20, "Too few prefilter candidates: "+str(len(symbols)); assert d.get("yahooCount",0)>0, d; assert "Yahoo Finance" in d.get("source",""), d.get("source"); assert "Finviz" in d.get("source","") and d.get("finviz",{}).get("status")=="ok", d.get("finviz"); assert all(re.fullmatch(r"[A-Z0-9.-]+",s) and s!="MSFT" for s in symbols), "Invalid symbol in prefilter"; print("Prefilter OK:",len(symbols),"symbols; Yahoo:",d.get("yahooCount"),"; Finviz:",d.get("finviz",{}).get("count"),"; source:",d.get("source"))'
+
       - name: Smoke test Finviz integration
         shell: bash
         run: |
