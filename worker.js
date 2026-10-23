@@ -96,7 +96,7 @@ async function yahooScreener(scrIds,count=250) {
   return [];
 }
 async function finvizCandidates(){
-  // Lee el screener público de Finviz; no usa credenciales ni inventa resultados.
+  // Lee el screener público sin credenciales. Tolera tanto tablas antiguas como el HTML nuevo.
   const configs=[
     {sort:"-relativevolume",start:1},
     {sort:"-relativevolume",start:21},
@@ -104,26 +104,34 @@ async function finvizCandidates(){
     {sort:"-change",start:21}
   ];
   const pages=await Promise.all(configs.map(async cfg=>{
-    let last={ok:false,status:0,rows:[],error:"No host tried"};
-    for(const host of ["https://www.finviz.com","https://finviz.com"]){
+    let last={ok:false,status:0,rows:[],error:"No host tried",htmlLength:0};
+    for(const host of ["https://finviz.com","https://www.finviz.com"]){
       try{
         const url=host+"/screener.ashx?v=111&f=sh_price_o5,sh_avgvol_o500&o="+encodeURIComponent(cfg.sort)+"&r="+cfg.start;
         const r=await fetchWithTimeout(url,{headers:{accept:"text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8","user-agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36","accept-language":"en-US,en;q=0.9","referer":"https://finviz.com/"}},9000);
-        if(!r.ok){last={ok:false,status:r.status,rows:[],error:"HTTP "+r.status+" from "+host};continue;}
-        const html=await r.text();
-        const rows=[];
-        for(const m of html.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/gi)){
+        if(!r.ok){last={ok:false,status:r.status,rows:[],error:"HTTP "+r.status+" from "+host,htmlLength:0};continue;}
+        const html=(await r.text()).replace(/&amp;/gi,"&");
+        const byTicker=new Map();
+        // Prefer actual screener rows where possible.
+        for(const m of html.matchAll(/<tr\\b[^>]*>([\\s\\S]*?)<\\/tr>/gi)){
           const row=m[1];
-          const link=row.match(/(?:quote\.ashx\?t=|quote\?t=)([A-Z0-9.\-]+)/i);
+          const link=row.match(/(?:quote\\.ashx\\?t=|quote\\?t=)([A-Z0-9.\\-]+)/i);
           if(!link)continue;
           const symbol=String(link[1]||"").toUpperCase();
           if(!/^[A-Z0-9.-]+$/.test(symbol)||symbol==="MSFT")continue;
-          const cells=[...row.matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/gi)].map(x=>x[1].replace(/<[^>]*>/g," ").replace(/&nbsp;|&#160;/gi," ").replace(/&amp;/gi,"&").replace(/&#39;|&apos;/gi,"'").replace(/&quot;/gi,'"').replace(/\s+/g," ").trim());
-          rows.push({symbol,sort:cfg.sort.startsWith("-")?cfg.sort.slice(1):cfg.sort,cells});
+          const cells=[...row.matchAll(/<(?:td|th)\\b[^>]*>([\\s\\S]*?)<\\/(?:td|th)>/gi)].map(x=>x[1].replace(/<[^>]*>/g," ").replace(/&nbsp;|&#160;/gi," ").replace(/&amp;/gi,"&").replace(/&#39;|&apos;/gi,"'").replace(/&quot;/gi,'"').replace(/\\s+/g," ").trim());
+          byTicker.set(symbol,{symbol,sort:cfg.sort.startsWith("-")?cfg.sort.slice(1):cfg.sort,cells});
         }
-        last={ok:true,status:r.status,rows};
+        // Fallback: the current screener may place ticker links outside a simple tr structure.
+        if(!byTicker.size){
+          for(const m of html.matchAll(/(?:href|data-href)=["'][^"']*(?:quote\\.ashx|quote)\\?[^"']*?t=([A-Z0-9.\\-]+)/gi)){
+            const symbol=String(m[1]||"").toUpperCase();
+            if(/^[A-Z0-9.-]+$/.test(symbol)&&symbol!=="MSFT")byTicker.set(symbol,{symbol,sort:cfg.sort.startsWith("-")?cfg.sort.slice(1):cfg.sort,cells:[]});
+          }
+        }
+        last={ok:true,status:r.status,rows:[...byTicker.values()],htmlLength:html.length,error:null};
         break;
-      }catch(e){last={ok:false,status:0,rows:[],error:e?.message||String(e)}}
+      }catch(e){last={ok:false,status:0,rows:[],error:e?.message||String(e),htmlLength:0};}
     }
     return last;
   }));
@@ -142,12 +150,11 @@ async function finvizCandidates(){
     candidates:candidates.slice(0,80),
     pagesChecked:configs.length,
     pagesSucceeded:pages.filter(x=>x.ok).length,
-    pageDiagnostics:pages.map((p,i)=>({page:i+1,ok:p.ok,httpStatus:p.status,rows:p.rows.length,error:p.error||null})),
+    pageDiagnostics:pages.map((p,i)=>({page:i+1,ok:p.ok,httpStatus:p.status,rows:p.rows.length,htmlLength:p.htmlLength||0,error:p.error||null})),
     retrievedAt:new Date().toISOString(),
-    note:candidates.length?"Candidatos extraídos del screener público; no son por sí solos señales de compra.":"Finviz no devolvió filas legibles; revisar pageDiagnostics para distinguir bloqueo HTTP de cambio de formato."
+    note:candidates.length?"Candidatos extraídos del screener público; no son por sí solos señales de compra.":"Finviz no devolvió símbolos legibles; el radar debe continuar con Yahoo y este diagnóstico permite detectar cambios de formato o bloqueo."
   };
 }
-
 async function yahooMovers() {
   // Prefiltro orientado a ANTICIPACIÓN: no usa solo ganadores/perdedores.
   // Mezcla actividad, crecimiento y small caps para encontrar acumulación antes
