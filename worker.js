@@ -137,8 +137,9 @@ async function finvizCandidates(){
     candidates:candidates.slice(0,80),
     pagesChecked:configs.length,
     pagesSucceeded:pages.filter(x=>x.ok).length,
+    pageDiagnostics:pages.map((p,i)=>({page:i+1,ok:p.ok,httpStatus:p.status,rows:p.rows.length,error:p.error||null})),
     retrievedAt:new Date().toISOString(),
-    note:candidates.length?"Candidatos extraídos del screener público; no son por sí solos señales de compra.":"Finviz no devolvió filas legibles; posible bloqueo o cambio de formato."
+    note:candidates.length?"Candidatos extraídos del screener público; no son por sí solos señales de compra.":"Finviz no devolvió filas legibles; revisar pageDiagnostics para distinguir bloqueo HTTP de cambio de formato."
   };
 }
 
