@@ -170,7 +170,7 @@ async function finvizCandidates(){
             byTicker.set(symbol,{symbol,sort:cfg.sort.startsWith("-")?cfg.sort.slice(1):cfg.sort,cells,method:"html-fallback"});
           }
         }
-        last={ok:true,status:r.status,rows:[...byTicker.values()],htmlLength:html.length,error:null,method:"html",debug:{trTags:(html.match(/<tr\\b/gi)||[]).length,tdTags:(html.match(/<td\\b/gi)||[]).length,quoteLinks:(html.match(/quote(?:\\.ashx)?\\?t=/gi)||[]).length,tableTags:(html.match(/<table\\b/gi)||[]).length,firstTickerLink:(html.match(/.{0,120}(?:quote\\.ashx\\?t=|quote\\?t=)[A-Z0-9.\\-]+.{0,180}/i)||[])[0]||null}};
+        last={ok:true,status:r.status,rows:[...byTicker.values()],htmlLength:html.length,error:null,method:"html",debug:{trTags:(html.match(/<tr\b/gi)||[]).length,tdTags:(html.match(/<td\b/gi)||[]).length,quoteLinks:(html.match(/quote(?:\.ashx)?\?t=/gi)||[]).length,tableTags:(html.match(/<table\b/gi)||[]).length,firstTickerLink:(html.match(/.{0,120}(?:quote\.ashx\?t=|quote\?t=)[A-Z0-9.\-]+.{0,180}/i)||[])[0]||null}};
         break;
       }catch(e){last={ok:false,status:0,rows:[],error:e?.message||String(e),htmlLength:0,method:"error"};}
     }
