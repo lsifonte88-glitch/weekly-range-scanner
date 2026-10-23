@@ -118,7 +118,7 @@ async function finvizCandidates(){
     const norm=x=>String(x||"").toLowerCase().replace(/[^a-z0-9]/g,"");
     const index=names=>(headers||[]).findIndex(h=>names.includes(norm(h)));
     const val=names=>{const i=index(names);return i>=0?String(cells?.[i]||"").trim():null;};
-    const num=names=>{const raw=val(names);if(raw==null||raw===""||raw==="-"||raw==="N/A")return null;const n=Number(raw.replace(/[$,%]/g,"").replace(/,/g,""));return Number.isFinite(n)?n:null;};
+    const num=names=>{const raw=val(names);if(raw==null||raw===""||raw==="-"||raw==="N/A")return null;const cleaned=raw.replace(/[$,%]/g,"").replace(/,/g,"").trim();const m=cleaned.match(/^(-?\d+(?:\.\d+)?)\s*([KMBT])?$/i);if(!m)return null;const scale=({K:1e3,M:1e6,B:1e9,T:1e12})[(m[2]||"").toUpperCase()]||1;const n=Number(m[1])*scale;return Number.isFinite(n)?n:null;};
     return {
       symbol,
       sector:val(["sector"]),
@@ -227,7 +227,7 @@ async function finvizCandidates(){
     symbols:candidates.map(x=>x.symbol),
     candidates:candidates.slice(0,80).map(x=>({...x,fields:x.fields||finvizFields(x.headers,x.cells,x.symbol)})),
     pagesChecked:configs.length,pagesSucceeded:pages.filter(x=>x.ok).length,
-    pageDiagnostics:pages.map((p,i)=>({page:i+1,ok:p.ok,httpStatus:p.status,rows:p.rows.length,htmlLength:p.htmlLength||0,method:p.method||"unknown",error:p.error||null,debug:p.debug||null,sampleHeaders:p.rows[0]?.headers||null,sampleCells:p.rows[0]?.cells||null,sampleMethod:p.rows[0]?.method||null})),
+    pageDiagnostics:pages.map((p,i)=>({page:i+1,ok:p.ok,httpStatus:p.status,rows:p.rows.length,htmlLength:p.htmlLength||0,method:p.method||"unknown",error:p.error||null,debug:p.debug||null,sampleHeaders:p.rows[0]?.headers||null,sampleCells:p.rows[0]?.cells||null,sampleFields:p.rows[0]?finvizFields(p.rows[0].headers,p.rows[0].cells,p.rows[0].symbol):null,sampleMethod:p.rows[0]?.method||null})),
     retrievedAt:new Date().toISOString(),
     note:!candidates.length
       ?"Finviz no devolvió símbolos legibles; el radar debe continuar con Yahoo."
