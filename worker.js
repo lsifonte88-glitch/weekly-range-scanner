@@ -358,7 +358,8 @@ export default {
         const [yahooSymbols,finviz]=await Promise.all([yahooMovers(),finvizCandidates()]);
         // Finviz se antepone para que sus candidatos entren primero en el radar,
         // sin perder la fuente dinámica de Yahoo como respaldo/complemento.
-        const symbols=[...new Set([...(finviz.symbols||[]),...yahooSymbols])];
+        const trustedFinvizSymbols=finviz.status==="ok"?(finviz.symbols||[]):[];
+        const symbols=[...new Set([...trustedFinvizSymbols,...yahooSymbols])];
         if (symbols.length) {
           return json({
             status:"ok",count:symbols.length,symbols:symbols.slice(0,48),
