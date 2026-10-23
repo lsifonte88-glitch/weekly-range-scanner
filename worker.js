@@ -170,7 +170,7 @@ async function finvizCandidates(){
             byTicker.set(symbol,{symbol,sort:cfg.sort.startsWith("-")?cfg.sort.slice(1):cfg.sort,cells,method:"html-fallback"});
           }
         }
-        last={ok:true,status:r.status,rows:[...byTicker.values()],htmlLength:html.length,error:null,method:"html"};
+        last={ok:true,status:r.status,rows:[...byTicker.values()],htmlLength:html.length,error:null,method:"html",debug:{trTags:(html.match(/<tr\\b/gi)||[]).length,tdTags:(html.match(/<td\\b/gi)||[]).length,quoteLinks:(html.match(/quote(?:\\.ashx)?\\?t=/gi)||[]).length,tableTags:(html.match(/<table\\b/gi)||[]).length,firstTickerLink:(html.match(/.{0,120}(?:quote\\.ashx\\?t=|quote\\?t=)[A-Z0-9.\\-]+.{0,180}/i)||[])[0]||null}};
         break;
       }catch(e){last={ok:false,status:0,rows:[],error:e?.message||String(e),htmlLength:0,method:"error"};}
     }
@@ -192,7 +192,7 @@ async function finvizCandidates(){
     symbols:candidates.map(x=>x.symbol),
     candidates:candidates.slice(0,80),
     pagesChecked:configs.length,pagesSucceeded:pages.filter(x=>x.ok).length,
-    pageDiagnostics:pages.map((p,i)=>({page:i+1,ok:p.ok,httpStatus:p.status,rows:p.rows.length,htmlLength:p.htmlLength||0,method:p.method||"unknown",error:p.error||null})),
+    pageDiagnostics:pages.map((p,i)=>({page:i+1,ok:p.ok,httpStatus:p.status,rows:p.rows.length,htmlLength:p.htmlLength||0,method:p.method||"unknown",error:p.error||null,debug:p.debug||null})),
     retrievedAt:new Date().toISOString(),
     note:!candidates.length
       ?"Finviz no devolvió símbolos legibles; el radar debe continuar con Yahoo."
